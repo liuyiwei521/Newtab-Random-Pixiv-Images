@@ -104,25 +104,21 @@
   }
 
   const sendRefreshMessage = (() => {
-    const messageQueue = [];
+    let isRequestInProgress = false;
     return () => {
-      messageQueue.push("fetchImage");
-      if (messageQueue.length === 1) {
-        queueMicrotask(() => {
-          browser.runtime.sendMessage({ action: "fetchImage" }, (res) => {
-            if (browser.runtime.lastError) {
-              setTimeout(() => {
-                messageQueue.length = 0;
-                sendRefreshMessage();
-              }, 100);
-            } else {
-              changeElement(res).then(() => {
-                messageQueue.length = 0;
-              });
-            }
-          });
-        });
+      if (isRequestInProgress) {
+        return;
       }
+      isRequestInProgress = true;
+      chrome.runtime.sendMessage({ action: "fetchImage" }, (res) => {
+        if (chrome.runtime.lastError) {
+          console.warn("Context invalidated, message could not be processed:", chrome.runtime.lastError.message);
+          return;
+        }
+        changeElement(res).finally(() => {
+          isRequestInProgress = false;
+        });
+      });
     };
   })();
 
