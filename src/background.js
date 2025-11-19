@@ -88,17 +88,33 @@ class Queue {
 }
 
 async function fetchPixivJson(url) {
-  let res = await fetch(url);
-  let res_json = await res.json();
-  if (res_json.error == true) {
-    console.error(`Fetch pixiv json error: ${res_json}`);
+  try {
+    let res = await fetch(url);
+    if (!res.ok) {
+      console.error(`Fetch pixiv json failed: ${res.status} ${res.statusText}`);
+      return null;
+    }
+    let res_json = await res.json();
+    if (res_json.error) {
+      console.error(`Pixiv API error: ${res_json.message}`);
+      return null;
+    }
+    return res_json;
+  } catch (e) {
+    console.error(`Fetch pixiv json error:`, e);
+    return null;
   }
-  return res_json;
 }
 
 async function fetchImage(url) {
-  let res = await fetch(url);
-  return await res.blob();
+  try {
+    let res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch (e) {
+    console.error(`Fetch image error:`, e);
+    return null;
+  }
 }
 
 let baseUrl = "https://www.pixiv.net";
@@ -111,6 +127,12 @@ class SearchSource {
     this.params = ["order", "mode", "p", "s_mode", "type", "scd", "ecd", "blt", "bgt"];
     this.totalPage = 0;
     this.itemsPerPage = 60;
+    this.illustInfoPages = {};
+  }
+
+  updateConfig(config) {
+    this.searchParam = config;
+    this.totalPage = 0;
     this.illustInfoPages = {};
   }
 
@@ -155,56 +177,81 @@ class SearchSource {
   }
 
   async getRandomIllust() {
-    if (this.totalPage === 0) {
-      let firstPage = await this.searchIllustPage(1);
-      let total = firstPage.body.illust.total;
-      this.totalPage = Math.ceil(total / this.itemsPerPage);
-    }
-    let randomPage = getRandomInt(0, this.totalPage) + 1;
-    if (!this.illustInfoPages[randomPage]) {
-      let pageObj = await this.searchIllustPage(randomPage);
-      if (!pageObj) {
-        console.error('Fetch empty page, maybe search params is flawed');
-      }
-      let total = pageObj.body.illust.total;
-      let tp = Math.ceil(total / this.itemsPerPage);
-      if (tp > this.totalPage) {
-        this.totalPage = tp;
-      }
-      // filter images
-      pageObj.body.illust.data = pageObj.body.illust.data.filter(
-        (el) => {
-          let condition1 = !this.searchParam.min_sl || el.sl >= this.searchParam.min_sl;
-          let condition2 = !this.searchParam.max_sl || el.sl <= this.searchParam.max_sl;
-          let condition3 = !this.searchParam.aiType || el.aiType == this.searchParam.aiType;
-          return condition1 && condition2 && condition3;
+    const MAX_RETRIES = 5;
+    for (let i = 0; i < MAX_RETRIES; i++) {
+      try {
+        if (this.totalPage === 0) {
+          let firstPage = await this.searchIllustPage(1);
+          if (!firstPage || !firstPage.body) continue;
+          let total = firstPage.body.illust.total;
+          this.totalPage = Math.ceil(total / this.itemsPerPage);
+          if (this.totalPage === 0) return null;
         }
-      );
-      this.illustInfoPages[randomPage] = pageObj.body.illust.data;
-    }
-    let illustArray = this.illustInfoPages[randomPage];
-    let randomIndex = getRandomInt(0, illustArray.length);
-    let res = {};
-    res.illustId = illustArray[randomIndex].id;
-    res.profileImageUrl = illustArray[randomIndex].profileImageUrl;
-    let illustInfo = await fetchPixivJson(baseUrl + illustInfoUrl + res.illustId);
+        
+        let randomPage = getRandomInt(0, this.totalPage) + 1;
+        if (!this.illustInfoPages[randomPage]) {
+          let pageObj = await this.searchIllustPage(randomPage);
+          if (!pageObj || !pageObj.body) continue;
+          
+          let total = pageObj.body.illust.total;
+          let tp = Math.ceil(total / this.itemsPerPage);
+          if (tp > this.totalPage) {
+            this.totalPage = tp;
+          }
+          
+          // filter images
+          pageObj.body.illust.data = pageObj.body.illust.data.filter(
+            (el) => {
+              let condition1 = !this.searchParam.min_sl || el.sl >= this.searchParam.min_sl;
+              let condition2 = !this.searchParam.max_sl || el.sl <= this.searchParam.max_sl;
+              let condition3 = !this.searchParam.aiType || el.aiType == this.searchParam.aiType;
+              return condition1 && condition2 && condition3;
+            }
+          );
+          this.illustInfoPages[randomPage] = pageObj.body.illust.data;
+        }
+        
+        let illustArray = this.illustInfoPages[randomPage];
+        if (!illustArray || illustArray.length === 0) continue;
 
-    res.userName = illustInfo.body.userName;
-    res.userId = illustInfo.body.userId;
-    res.illustId = illustInfo.body.illustId;
-    res.userIdUrl = baseUrl + "/users/" + illustInfo.body.userId;
-    res.illustIdUrl = baseUrl + "/artworks/" + illustInfo.body.illustId;
-    res.title = illustInfo.body.title;
-    res.imageObjectUrl = illustInfo.body.urls.regular;
-    await Promise.all([
-      fetchImage(res.imageObjectUrl)
-        .then((blob) => blobToDataUrl(blob))
-        .then((url) => { res.imageObjectUrl = url; }),
-      fetchImage(res.profileImageUrl)
-        .then((blob) => blobToDataUrl(blob))
-        .then((url) => { res.profileImageUrl = url; })
-    ]);
-    return res;
+        let randomIndex = getRandomInt(0, illustArray.length);
+        let res = {};
+        res.illustId = illustArray[randomIndex].id;
+        res.profileImageUrl = illustArray[randomIndex].profileImageUrl;
+        
+        let illustInfo = await fetchPixivJson(baseUrl + illustInfoUrl + res.illustId);
+        if (!illustInfo || !illustInfo.body) continue;
+
+        res.userName = illustInfo.body.userName;
+        res.userId = illustInfo.body.userId;
+        res.illustId = illustInfo.body.illustId;
+        res.userIdUrl = baseUrl + "/users/" + illustInfo.body.userId;
+        res.illustIdUrl = baseUrl + "/artworks/" + illustInfo.body.illustId;
+        res.title = illustInfo.body.title;
+        res.imageObjectUrl = illustInfo.body.urls.regular;
+        
+        let [imgBlob, profileBlob] = await Promise.all([
+          fetchImage(res.imageObjectUrl),
+          fetchImage(res.profileImageUrl)
+        ]);
+        
+        if (!imgBlob) continue;
+        res.imageObjectUrl = await blobToDataUrl(imgBlob);
+        
+        if (profileBlob) {
+             try {
+                res.profileImageUrl = await blobToDataUrl(profileBlob);
+             } catch (e) {
+                // ignore profile image error
+             }
+        }
+        return res;
+      } catch (e) {
+        console.error("Error in getRandomIllust loop:", e);
+        continue;
+      }
+    }
+    return null;
   }
 }
 
@@ -217,63 +264,71 @@ function blobToDataUrl(blob) {
   });
 }
 
-async function start() {
-  let config = await chrome.storage.local.get(defaultConfig);
-  let searchSource = new SearchSource(config);
-  let queue_cache = await chrome.storage.session.get("illustQueue");
-  let illust_queue;
-  if (Object.keys(queue_cache).length === 0) {
-    illust_queue = new Queue(2, []);
-  } else {
-    illust_queue = Object.setPrototypeOf(queue_cache.illustQueue, Queue.prototype)
-  }
+let searchSource;
+let illust_queue;
+let running = 0;
 
-  let running = 0;
+function fillQueue() {
   while (running < illust_queue.capacity() - illust_queue.size()) {
     ++running;
     setTimeout(async () => {
       if (illust_queue.full()) { return; }
       let res = await searchSource.getRandomIllust();
-      illust_queue.push(res);
-      chrome.storage.session.set({ illustQueue: illust_queue });
+      if (res) {
+        illust_queue.push(res);
+        chrome.storage.session.set({ illustQueue: illust_queue });
+      }
       --running;
     }, 0);
   }
+}
 
-  chrome.runtime.onMessage.addListener(function (
-    message,
-    sender,
-    sendResponse
-  ) {
-    (
-      async () => {
-        if (message.action === "fetchImage") {
-          let res = illust_queue.pop();
-          if (!res) {
-            res = await searchSource.getRandomIllust();
-          }
+async function start() {
+  let config = await chrome.storage.local.get(defaultConfig);
+  searchSource = new SearchSource(config);
+  let queue_cache = await chrome.storage.session.get("illustQueue");
+  
+  if (Object.keys(queue_cache).length === 0) {
+    illust_queue = new Queue(2);
+  } else {
+    illust_queue = Object.setPrototypeOf(queue_cache.illustQueue, Queue.prototype)
+  }
+
+  fillQueue();
+  console.log("background script loaded");
+}
+
+let initPromise = start();
+
+chrome.runtime.onMessage.addListener(function (
+  message,
+  sender,
+  sendResponse
+) {
+  (
+    async () => {
+      await initPromise;
+      if (message.action === "fetchImage") {
+        let res = illust_queue.pop();
+        if (!res) {
+          res = await searchSource.getRandomIllust();
+        }
+        if (res) {
           sendResponse(res);
           let { profileImageUrl, imageObjectUrl, ...filteredRes } = res;
           console.log(filteredRes);
-          while (running < illust_queue.capacity() - illust_queue.size()) {
-            ++running;
-            setTimeout(async () => {
-              if (illust_queue.full()) { return; }
-              let res = await searchSource.getRandomIllust();
-              illust_queue.push(res);
-              chrome.storage.session.set({ illustQueue: illust_queue });
-              --running;
-            }, 0);
-          }
-        } else if (message.action === "updateConfig") {
-          let config = await chrome.storage.local.get(defaultConfig);
-          Object.assign(searchSource.searchParam, config);
+        } else {
+          sendResponse(null);
         }
+        fillQueue();
+      } else if (message.action === "updateConfig") {
+        let config = await chrome.storage.local.get(defaultConfig);
+        searchSource.updateConfig(config);
+        illust_queue = new Queue(2);
+        chrome.storage.session.set({ illustQueue: illust_queue });
+        fillQueue();
       }
-    )();
-    return true;
-  });
-  console.log("background script loaded");
-};
-
-start();
+    }
+  )();
+  return true;
+});

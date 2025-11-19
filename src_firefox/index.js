@@ -92,8 +92,14 @@
   async function changeElement(illustObject) {
     if (!illustObject) { return; }
     for (let k in binding.ref) {
-      for (let o of binding.ref[k]) {
-        o(illustObject[k]);
+      if (illustObject.hasOwnProperty(k)) {
+        let value = illustObject[k];
+        if (value === null || value === undefined) {
+          if (k === 'userName' || k === 'title') value = '';
+        }
+        for (let o of binding.ref[k]) {
+          o(value);
+        }
       }
     }
     binding.containerElement.classList.toggle("notReady", false);
@@ -113,6 +119,7 @@
       chrome.runtime.sendMessage({ action: "fetchImage" }, (res) => {
         if (chrome.runtime.lastError) {
           console.warn("Context invalidated, message could not be processed:", chrome.runtime.lastError.message);
+          isRequestInProgress = false;
           return;
         }
         changeElement(res).finally(() => {

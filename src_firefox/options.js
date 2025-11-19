@@ -95,7 +95,7 @@ const restoreOptions = () => {
     document.getElementById('type').value = items.type;
     document.getElementById('min_sl').value = items.min_sl;
     document.getElementById('max_sl').value = items.max_sl;
-    document.getElementById('aiType').value = items.aiType;
+    document.getElementById('aiType').value = items.aiType === null ? '' : items.aiType;
     document.getElementById('andKeywords').value = items.andKeywords;
     document.getElementById('orKeywords').value = items.orKeywords;
     document.getElementById('minusKeywords').value = items.minusKeywords;
