@@ -8,6 +8,7 @@
       const illustTitleElement = document.body.querySelector("#illustTitle");
       const illustNameElement = document.body.querySelector("#illustName");
       const refreshElement = document.body.querySelector("#refreshButton");
+      const settingsElement = document.body.querySelector("#settingsButton");
       const containerElement = document.body.querySelector("#container");
       const wallpaperElement = document.body.querySelector("#wallpaper");
       const illustInfoElement = document.body.querySelector("#illustInfo");
@@ -68,6 +69,9 @@
         refreshElement.className = "unpressed";
       });
       refreshElement.addEventListener("click", sendRefreshMessage);
+      settingsElement.addEventListener("click", () => {
+        window.open(browser.runtime.getURL("tags.html"), "_blank");
+      });
       this.illustInfoFadeOutTimeoutId = null;
       illustInfoElement.addEventListener("mouseleave", () => {
         this.illustInfoFadeOutTimeoutId = setTimeout(() => {

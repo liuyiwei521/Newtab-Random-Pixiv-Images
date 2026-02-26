@@ -76,6 +76,22 @@ body {
   background-color: rgba(23, 24, 25, 1);
 }
 
+#settingsButton {
+  display: inline-block;
+  border-radius: 100%;
+  width: 18px;
+  height: 18px;
+  margin-top: 16px;
+  margin-left: 5px;
+  vertical-align: top;
+  cursor: pointer;
+  transition: background-color 0.5s;
+}
+
+#settingsButton:hover {
+  background-color: rgba(23, 24, 25, 1);
+}
+
 #refreshButton.pressed {
   animation-name: beginRotation;
   animation-fill-mode: forwards;

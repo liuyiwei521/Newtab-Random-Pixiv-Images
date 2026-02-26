@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Tag Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #0f0f1a;
+            color: #e0e0e0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px;
+            padding: 36px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .scroll-area {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 4px;
+        }
+
+        .scroll-area::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scroll-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .scroll-area::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .scroll-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 26px;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #6c63ff, #e040fb);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 28px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .top-bar .back-link {
+            color: #6c63ff;
+            text-decoration: none;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.2s;
+        }
+
+        .top-bar .back-link:hover {
+            color: #e040fb;
+        }
+
+        .lang-select {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .lang-select select {
+            background: #252540;
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* Tag Section */
+        .tag-section {
+            margin-bottom: 24px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: border-color 0.3s;
+        }
+
+        .tag-section:hover {
+            border-color: rgba(108, 99, 255, 0.3);
+        }
+
+        .tag-section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tag-section-header .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .badge-and {
+            background: rgba(76, 175, 80, 0.15);
+            color: #66bb6a;
+        }
+
+        .badge-or {
+            background: rgba(33, 150, 243, 0.15);
+            color: #42a5f5;
+        }
+
+        .badge-minus {
+            background: rgba(244, 67, 54, 0.15);
+            color: #ef5350;
+        }
+
+        .tag-section-header h2 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #ccc;
+        }
+
+        .tag-count {
+            font-size: 12px;
+            color: #666;
+            margin-left: auto;
+        }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 36px;
+            margin-bottom: 12px;
+        }
+
+        .tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px 5px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            animation: tagIn 0.25s ease;
+            cursor: default;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .tag-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .tag-and {
+            background: rgba(76, 175, 80, 0.12);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            color: #a5d6a7;
+        }
+
+        .tag-or {
+            background: rgba(33, 150, 243, 0.12);
+            border: 1px solid rgba(33, 150, 243, 0.3);
+            color: #90caf9;
+        }
+
+        .tag-minus {
+            background: rgba(244, 67, 54, 0.12);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #ef9a9a;
+        }
+
+        .tag-chip .remove-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: inherit;
+            border-radius: 50%;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+            line-height: 1;
+        }
+
+        .tag-chip .remove-btn:hover {
+            background: rgba(255, 70, 70, 0.5);
+            color: #fff;
+        }
+
+        .tag-input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tag-input-row input {
+            flex: 1;
+            padding: 8px 14px;
+            background: #1e1e35;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .tag-input-row input:focus {
+            border-color: #6c63ff;
+            box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+        }
+
+        .tag-input-row input::placeholder {
+            color: #555;
+        }
+
+        .btn-add {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #6c63ff, #7c4dff);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn-add:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(108, 99, 255, 0.4);
+        }
+
+        .btn-add:active {
+            transform: translateY(0);
+        }
+
+        /* Empty state */
+        .empty-state {
+            color: #555;
+            font-size: 13px;
+            font-style: italic;
+            padding: 4px 0;
+        }
+
+        /* Import / Export toolbar */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border: 1px dashed rgba(255, 255, 255, 0.08);
+        }
+
+        .toolbar h3 {
+            width: 100%;
+            font-size: 14px;
+            font-weight: 600;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+
+        .btn-tool {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #252540;
+            color: #ccc;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-tool:hover {
+            background: #2f2f50;
+            border-color: rgba(108, 99, 255, 0.4);
+            color: #fff;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* Import modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 28px;
+            width: 90%;
+            max-width: 520px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+            animation: modalIn 0.25s ease;
+        }
+
+        .modal h3 {
+            font-size: 18px;
+            margin-bottom: 6px;
+            color: #e0e0e0;
+        }
+
+        .modal .modal-desc {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .modal select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #252540;
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+            margin-bottom: 12px;
+        }
+
+        .modal textarea {
+            width: 100%;
+            height: 140px;
+            padding: 12px;
+            background: #1e1e35;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: 'Segoe UI', monospace;
+            outline: none;
+            resize: vertical;
+            margin-bottom: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .modal textarea:focus {
+            border-color: #6c63ff;
+        }
+
+        .modal textarea::placeholder {
+            color: #555;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-cancel {
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: transparent;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        .btn-confirm {
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            border: none;
+            background: linear-gradient(135deg, #6c63ff, #7c4dff);
+            color: #fff;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .btn-confirm:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(108, 99, 255, 0.4);
+        }
+
+        /* Bottom actions */
+        .bottom-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-save {
+            flex: 1;
+            padding: 13px;
+            font-size: 15px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #6c63ff, #7c4dff);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
+        }
+
+        .btn-save:active {
+            transform: translateY(0);
+        }
+
+        #status {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #66bb6a;
+            min-height: 20px;
+            transition: opacity 0.3s;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 200;
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast-success {
+            background: rgba(76, 175, 80, 0.9);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+        }
+
+        .toast-error {
+            background: rgba(244, 67, 54, 0.9);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(244, 67, 54, 0.3);
+        }
+
+        @keyframes tagIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="top-bar">
+            <a class="back-link" href="options.html">← <span id="backToOptions">Back to Options</span></a>
+            <div class="lang-select">
+                <span>🌐</span>
+                <select id="languageSelect">
+                    <option value="en">English</option>
+                    <option value="zh">中文</option>
+                    <option value="ja">日本語</option>
+                </select>
+            </div>
+        </div>
+
+        <h1 id="pageTitle">Tag Manager</h1>
+        <p class="subtitle" id="pageSubtitle">Manage your Pixiv search keywords visually</p>
+
+        <div class="scroll-area">
+            <!-- AND Keywords -->
+            <div class="tag-section">
+                <div class="tag-section-header">
+                    <span class="badge badge-and">∩</span>
+                    <h2 id="andSectionTitle">AND Keywords</h2>
+                    <span class="tag-count" id="andCount">0</span>
+                </div>
+                <div class="tags-container" id="andTagsContainer"></div>
+                <div class="tag-input-row">
+                    <input type="text" id="andInput" data-i18n-placeholder="addTagPlaceholder"
+                        placeholder="Add a tag..." />
+                    <button class="btn-add" data-category="and" id="andAddBtn">+</button>
+                </div>
+            </div>
+
+            <!-- OR Keywords -->
+            <div class="tag-section">
+                <div class="tag-section-header">
+                    <span class="badge badge-or">∪</span>
+                    <h2 id="orSectionTitle">OR Keywords</h2>
+                    <span class="tag-count" id="orCount">0</span>
+                </div>
+                <div class="tags-container" id="orTagsContainer"></div>
+                <div class="tag-input-row">
+                    <input type="text" id="orInput" data-i18n-placeholder="addTagPlaceholder"
+                        placeholder="Add a tag..." />
+                    <button class="btn-add" data-category="or" id="orAddBtn">+</button>
+                </div>
+            </div>
+
+            <!-- Minus Keywords -->
+            <div class="tag-section">
+                <div class="tag-section-header">
+                    <span class="badge badge-minus">−</span>
+                    <h2 id="minusSectionTitle">Exclude Keywords</h2>
+                    <span class="tag-count" id="minusCount">0</span>
+                </div>
+                <div class="tags-container" id="minusTagsContainer"></div>
+                <div class="tag-input-row">
+                    <input type="text" id="minusInput" data-i18n-placeholder="addTagPlaceholder"
+                        placeholder="Add a tag..." />
+                    <button class="btn-add" data-category="minus" id="minusAddBtn">+</button>
+                </div>
+            </div>
+
+            <!-- Toolbar: Import / Export -->
+            <div class="toolbar">
+                <h3 id="toolbarTitle">📦 Import / Export</h3>
+                <button class="btn-tool" id="importTextBtn">📋 <span id="importTextLabel">Import from
+                        Text</span></button>
+                <button class="btn-tool" id="importFileBtn">📁 <span id="importFileLabel">Import
+                        JSON</span></button>
+                <button class="btn-tool" id="exportBtn">💾 <span id="exportLabel">Export JSON</span></button>
+                <input type="file" id="fileInput" accept=".json" />
+            </div>
+
+            <div class="bottom-actions">
+                <button class="btn-save" id="saveBtn">Save</button>
+            </div>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <!-- Text Import Modal -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <h3 id="modalTitle">Import Tags from Text</h3>
+            <p class="modal-desc" id="modalDesc">Paste keywords below (separated by spaces, commas, or newlines)</p>
+            <select id="importCategory">
+                <option value="and" id="importCategoryAnd">AND Keywords</option>
+                <option value="or" id="importCategoryOr">OR Keywords</option>
+                <option value="minus" id="importCategoryMinus">Exclude Keywords</option>
+            </select>
+            <textarea id="importTextarea" data-i18n-placeholder="importPlaceholder"
+                placeholder="tag1, tag2, tag3..."></textarea>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="modalCancelBtn">Cancel</button>
+                <button class="btn-confirm" id="modalConfirmBtn">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script type="module" src="tags.js"></script>
+</body>
+
+</html>
