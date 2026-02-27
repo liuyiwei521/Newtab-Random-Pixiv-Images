@@ -2,7 +2,7 @@ English/[中文](./readme_cn.md)
 
 # Newtab Random Pixiv Images
 
-Randomly picks one image from pixiv search results to replace newtab background. By default search uses "10000users入り" keyword. In bottom right corner, you can load new image or check image details.You may need to login Pixiv first to make search functionality work.
+Randomly picks one image from Pixiv search results to replace your new tab background. By default search uses popular tags like "10000users入り". In the bottom right corner, you can refresh, open the tag manager, open the artwork page, and exclude tags. You may need to login Pixiv first to make search functionality work.
 
 ## Install
 ### chrome/edge:
@@ -18,6 +18,16 @@ Randomly picks one image from pixiv search results to replace newtab background.
 3. Select "This Firefox" tab on the left side.
 4. Click "Load Temporary Add-on..." button, then in the open window goto the "src_firefox" directory, select "manifest.json" file.
 5. Open newtab and enjoy a randomly picked pixiv illustration!
+
+## Features
+
+- 🎨 **Random wallpaper** — New tab shows a random Pixiv illustration.
+- 🔄 **One-click refresh** — Refresh button loads the next image.
+- 🔎 **Open artwork page** — The eye icon opens the current artwork page.
+- 🏷️ **Tag manager** — Visual AND/OR/NOT builder with presets.
+- 🚫 **Global blocklist** — Exclude tags globally (applies to all presets).
+- 📦 **Import/Export** — Backup or share tag presets as JSON.
+- 🌐 **Multi-language UI** — English / Chinese / Japanese.
 
 ## Pixiv Search Boolean Logic
 
