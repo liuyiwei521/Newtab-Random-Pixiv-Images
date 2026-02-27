@@ -344,103 +344,176 @@ browser.runtime.onMessage.addListener(function (
             let { profileImageUrl, imageObjectUrl, ...filteredRes } = res;
             console.log(filteredRes);
           } else {
-            sendResponse(null);
+            sendResponse({
+              error: "NO_RESULT",
+              message: "No image found. Please check your tags or Pixiv availability."
+            });
           }
           fillQueue();
         } catch (e) {
           console.error("fetchImage handler error:", e);
-          sendResponse(null);
+          sendResponse({
+            error: "FETCH_FAILED",
+            message: "Failed to fetch image. Please try again."
+          });
         }
       } else if (message.action === "updateConfig") {
         let config = await browser.storage.local.get(defaultConfig);
         migrateConfig(config);
+        console.log("Updated search query:", buildQuery(config));
         searchSource.updateConfig(config);
         illust_queue = new Queue(4);
         browser.storage.session.set({ illustQueue: illust_queue });
         fillQueue();
       } else if (message.action === "bookmarkIllust") {
         try {
-          let tabs = await browser.tabs.query({ url: "*://*.pixiv.net/*" });
-          let tabId;
-          if (tabs.length > 0) {
-            tabId = tabs[0].id;
-          } else {
-            let tab = await browser.tabs.create({ url: "https://www.pixiv.net/", active: false });
-            tabId = tab.id;
-            await new Promise((resolve) => {
-              let listener = (id, info) => {
-                if (id === tabId && info.status === "complete") {
-                  browser.tabs.onUpdated.removeListener(listener);
-                  resolve();
-                }
-              };
-              browser.tabs.onUpdated.addListener(listener);
-              setTimeout(() => { browser.tabs.onUpdated.removeListener(listener); resolve(); }, 15000);
-            });
-          }
+          const attemptBookmark = async (illustId, retryCount = 0) => {
+            // Find an existing Pixiv tab to inject into
+            let tabs = await browser.tabs.query({ url: "*://*.pixiv.net/*" });
+            let tabId;
+            if (tabs.length > 0) {
+              tabId = tabs[0].id;
+            } else {
+              // Open a Pixiv tab in background, wait for it to load
+              let tab = await browser.tabs.create({ url: "https://www.pixiv.net/", active: false });
+              tabId = tab.id;
+              // Wait for the tab to finish loading
+              await new Promise((resolve) => {
+                let listener = (id, info) => {
+                  if (id === tabId && info.status === "complete") {
+                    browser.tabs.onUpdated.removeListener(listener);
+                    resolve();
+                  }
+                };
+                browser.tabs.onUpdated.addListener(listener);
+                // Timeout after 15s
+                setTimeout(() => { browser.tabs.onUpdated.removeListener(listener); resolve(); }, 15000);
+              });
+            }
 
-          let illustId = String(message.illustId);
-          console.log("Bookmark: injecting into tab", tabId, "for illust", illustId);
+            let illustIdStr = String(illustId);
+            console.log("Bookmark: injecting into tab", tabId, "for illust", illustIdStr);
 
-          let results = await browser.scripting.executeScript({
-            target: { tabId: tabId },
-            func: (illustId) => {
-              return new Promise((resolve) => {
-                let meta = document.querySelector('#meta-global-data');
+            // Inject script into the Pixiv tab to extract CSRF token and POST bookmark
+            let results = await browser.scripting.executeScript({
+              target: { tabId: tabId },
+              world: "MAIN",
+              func: async (illustId) => {
+                // --- Extract CSRF token (try multiple sources) ---
                 let token = null;
+
+                // 1. Meta tag
+                let meta = document.querySelector('#meta-global-data')
+                  || document.querySelector('meta[name="global-data"]');
                 if (meta) {
-                  try {
-                    let data = JSON.parse(meta.getAttribute('content'));
-                    token = data.token;
-                  } catch (e) { /* ignore */ }
+                  try { token = JSON.parse(meta.getAttribute('content')).token; } catch (e) { }
                 }
+
+                // 2. JS globals (Pixiv stores token in various places)
+                if (!token && typeof pixiv !== 'undefined' && pixiv.context) {
+                  token = pixiv.context.token;
+                }
+                if (!token && typeof globalInitData !== 'undefined') {
+                  token = globalInitData.token;
+                }
+
+                // 3. __NEXT_DATA__ script tag
                 if (!token) {
-                  let scripts = document.querySelectorAll('script');
-                  for (let s of scripts) {
-                    let m = s.textContent.match(/"token"\s*:\s*"([^"]+)"/);
+                  let nd = document.querySelector('#__NEXT_DATA__');
+                  if (nd) {
+                    try {
+                      let data = JSON.parse(nd.textContent);
+                      token = data?.props?.pageProps?.token;
+                    } catch (e) { }
+                  }
+                }
+
+                // 4. Search all script tags
+                if (!token) {
+                  for (let s of document.querySelectorAll('script')) {
+                    let m = s.textContent.match(/"token"\s*:\s*"([a-f0-9]{32})"/);
                     if (m) { token = m[1]; break; }
                   }
                 }
-                if (!token) {
-                  resolve({ success: false, error: "CSRF token not found. Please refresh pixiv.net." });
-                  return;
-                }
-                fetch("/ajax/illusts/bookmarks/add", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Accept": "application/json",
-                    "X-CSRF-Token": token,
-                  },
-                  body: JSON.stringify({
-                    illust_id: illustId,
-                    restrict: 0,
-                    comment: "",
-                    tags: [],
-                  }),
-                  credentials: "include",
-                })
-                  .then(r => r.json())
-                  .then(json => {
-                    if (json.error) {
-                      resolve({ success: false, error: json.message || "Bookmark failed" });
-                    } else {
-                      resolve({ success: true });
-                    }
-                  })
-                  .catch(e => resolve({ success: false, error: e.message }));
-              });
-            },
-            args: [illustId],
-          });
 
-          let result = results && results[0] && results[0].result;
-          console.log("Bookmark result:", result);
-          if (result) {
-            sendResponse(result);
-          } else {
-            sendResponse({ success: false, error: "Script injection failed" });
+                // 5. Ultimate fallback: fetch current page HTML (same-origin, bypasses Cloudflare)
+                if (!token) {
+                  try {
+                    let res = await fetch(location.href, { credentials: 'include' });
+                    let html = await res.text();
+                    let m = html.match(/"token"\s*:\s*"([a-f0-9]{32})"/);
+                    if (m) token = m[1];
+                  } catch (e) { }
+                }
+
+                if (!token) {
+                  return { success: false, code: "TOKEN_NOT_FOUND", error: "CSRF token not found. Please refresh pixiv.net." };
+                }
+
+                // --- Send bookmark request (same-origin) ---
+                try {
+                  let r = await fetch("/ajax/illusts/bookmarks/add", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json; charset=utf-8",
+                      "Accept": "application/json",
+                      "X-CSRF-Token": token,
+                    },
+                    body: JSON.stringify({
+                      illust_id: illustId,
+                      restrict: 0,
+                      comment: "",
+                      tags: [],
+                    }),
+                    credentials: "include",
+                  });
+                  let json = await r.json();
+                  if (json.error) {
+                    return { success: false, code: "BOOKMARK_FAILED", error: json.message || "Bookmark failed" };
+                  }
+                  return { success: true };
+                } catch (e) {
+                  return { success: false, code: "BOOKMARK_FAILED", error: e.message };
+                }
+              },
+              args: [illustIdStr],
+            });
+
+            let result = results && results[0] && results[0].result;
+            console.log("Bookmark result:", result);
+            if (result && result.code === "TOKEN_NOT_FOUND" && retryCount < 1) {
+              // Retry once by reloading the Pixiv tab
+              try {
+                await browser.tabs.reload(tabId);
+                await new Promise((resolve) => {
+                  let listener = (id, info) => {
+                    if (id === tabId && info.status === "complete") {
+                      browser.tabs.onUpdated.removeListener(listener);
+                      resolve();
+                    }
+                  };
+                  browser.tabs.onUpdated.addListener(listener);
+                  setTimeout(() => { browser.tabs.onUpdated.removeListener(listener); resolve(); }, 15000);
+                });
+              } catch (e) {
+                console.warn("Pixiv tab reload failed:", e);
+              }
+              return attemptBookmark(illustIdStr, retryCount + 1);
+            }
+            return result || { success: false, code: "INJECT_FAILED", error: "Script injection failed" };
+          };
+
+          let result = await attemptBookmark(message.illustId, 0);
+          if (result && result.code === "TOKEN_NOT_FOUND") {
+            // Open login page to help user re-auth
+            await browser.tabs.create({ url: "https://www.pixiv.net/login", active: true });
+            sendResponse({
+              success: false,
+              error: "CSRF token not found. Opened Pixiv login page. Please log in and try again."
+            });
+            return;
           }
+          sendResponse(result || { success: false, error: "Script injection failed" });
         } catch (e) {
           console.error("Bookmark error:", e);
           sendResponse({ success: false, error: e.message });
@@ -453,8 +526,11 @@ browser.runtime.onMessage.addListener(function (
             activePresetIndex: 0,
           });
           migrateConfig(config);
+
           let tree = config.queryTree || { type: "group", connector: "AND", children: [] };
+          // Add negated tag
           tree.children.push({ type: "tag", value: message.tag, negated: true });
+
           let legacy = treeToLegacy(tree);
           let saveData = {
             queryTree: tree,
@@ -462,6 +538,8 @@ browser.runtime.onMessage.addListener(function (
             orGroups: legacy.orGroups,
             minusKeywords: legacy.minusKeywords,
           };
+
+          // Also update active preset if presets exist
           if (config.queryPresets && Array.isArray(config.queryPresets) && config.queryPresets.length > 0) {
             let idx = config.activePresetIndex || 0;
             if (idx < config.queryPresets.length) {
@@ -469,6 +547,7 @@ browser.runtime.onMessage.addListener(function (
             }
             saveData.queryPresets = config.queryPresets;
           }
+
           await browser.storage.local.set(saveData);
           searchSource.updateConfig({ ...config, ...saveData });
           illust_queue = new Queue(4);

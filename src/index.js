@@ -120,10 +120,15 @@
 
   async function changeElement(illustObject) {
     if (!illustObject) { return; }
+    if (illustObject.error) {
+      showToast(illustObject.message || "Failed to load image", "error");
+      return;
+    }
 
     // Store tags and illustId for like/dislike
     currentTags = illustObject.tags || [];
     currentIllustId = illustObject.illustId || null;
+    console.log("Illust tags:", currentTags.map(t => t.tag));
 
     // Reset like state
     const likeBtn = document.getElementById("likeButton");
@@ -156,21 +161,21 @@
     const likeBtn = document.getElementById("likeButton");
     if (likeBtn.classList.contains("liked")) return; // already bookmarked
 
-    chrome.runtime.sendMessage(
-      { action: "bookmarkIllust", illustId: currentIllustId },
-      (res) => {
-        if (chrome.runtime.lastError) {
-          showToast("Failed to bookmark", "error");
-          return;
+      chrome.runtime.sendMessage(
+        { action: "bookmarkIllust", illustId: currentIllustId },
+        (res) => {
+          if (chrome.runtime.lastError) {
+            showToast("Failed to bookmark", "error");
+            return;
+          }
+          if (res && res.success) {
+            likeBtn.classList.add("liked");
+            showToast("♥ Bookmarked!", "success");
+          } else {
+            showToast(res?.error || "Bookmark failed", "error");
+          }
         }
-        if (res && res.success) {
-          likeBtn.classList.add("liked");
-          showToast("♥ Bookmarked!", "success");
-        } else {
-          showToast(res?.error || "Bookmark failed", "error");
-        }
-      }
-    );
+      );
   }
 
   // ── Dislike (show tag popup) ──
