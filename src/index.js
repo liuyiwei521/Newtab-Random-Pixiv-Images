@@ -2,6 +2,7 @@
   // ── State ──
   let currentTags = [];
   let currentIllustId = null;
+  let currentIllustUrl = null;
   let currentTagScope = "preset";
 
   class Binding {
@@ -133,6 +134,7 @@
     // Store tags and illustId for like/dislike
     currentTags = illustObject.tags || [];
     currentIllustId = illustObject.illustId || null;
+    currentIllustUrl = illustObject.illustIdUrl || null;
     console.log("Illust tags:", currentTags.map(t => t.tag));
 
     // Reset like state
@@ -162,25 +164,8 @@
 
   // ── Like (bookmark) ──
   function handleLike() {
-    if (!currentIllustId) return;
-    const likeBtn = document.getElementById("likeButton");
-    if (likeBtn.classList.contains("liked")) return; // already bookmarked
-
-      chrome.runtime.sendMessage(
-        { action: "bookmarkIllust", illustId: currentIllustId },
-        (res) => {
-          if (chrome.runtime.lastError) {
-            showToast("Failed to bookmark", "error");
-            return;
-          }
-          if (res && res.success) {
-            likeBtn.classList.add("liked");
-            showToast("♥ Bookmarked!", "success");
-          } else {
-            showToast(res?.error || "Bookmark failed", "error");
-          }
-        }
-      );
+    if (!currentIllustUrl) return;
+    window.open(currentIllustUrl, "_blank");
   }
 
   // ── Dislike (show tag popup) ──
@@ -244,7 +229,7 @@
         if (res && res.success) {
           showToast(`Excluded: −${tag}`, "success");
           // Auto refresh to next image
-          setTimeout(() => sendRefreshMessage(), 500);
+          sendRefreshMessage();
         } else {
           showToast(res?.error || "Failed to exclude tag", "error");
         }
