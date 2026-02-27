@@ -425,26 +425,31 @@ chrome.runtime.onMessage.addListener(function (
             return;
           }
 
-          // Ensure illustId is a string
-          let illustId = String(message.illustId);
+          // illust_id must be a number for the Pixiv API
+          let illustId = Number(message.illustId);
+
+          let requestBody = {
+            illust_id: illustId,
+            restrict: 0,
+            comment: "",
+            tags: [],
+          };
+          console.log("Bookmark request:", { illustId, csrfToken: csrfToken.slice(0, 8) + "..." });
 
           let bookmarkRes = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "application/json; charset=utf-8",
+              "Accept": "application/json",
               "X-CSRF-Token": csrfToken,
+              "X-Requested-With": "XMLHttpRequest",
               "Referer": "https://www.pixiv.net/",
             },
-            body: JSON.stringify({
-              illust_id: illustId,
-              restrict: 0,
-              comment: "",
-              tags: [],
-            }),
+            body: JSON.stringify(requestBody),
             credentials: "include",
           });
           let bookmarkJson = await bookmarkRes.json();
-          console.log("Bookmark response:", bookmarkJson);
+          console.log("Bookmark response:", bookmarkRes.status, bookmarkJson);
           if (bookmarkJson.error) {
             sendResponse({ success: false, error: bookmarkJson.message || "Bookmark failed" });
           } else {

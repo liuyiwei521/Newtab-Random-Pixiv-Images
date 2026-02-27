@@ -377,15 +377,28 @@ browser.runtime.onMessage.addListener(function (
             sendResponse({ success: false, error: "Could not get CSRF token. Please login to Pixiv." });
             return;
           }
-          let illustId = String(message.illustId);
+          let illustId = Number(message.illustId);
+          let requestBody = {
+            illust_id: illustId,
+            restrict: 0,
+            comment: "",
+            tags: [],
+          };
+          console.log("Bookmark request:", { illustId, csrfToken: csrfToken.slice(0, 8) + "..." });
           let bookmarkRes = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, "Referer": "https://www.pixiv.net/" },
-            body: JSON.stringify({ illust_id: illustId, restrict: 0, comment: "", tags: [] }),
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Accept": "application/json",
+              "X-CSRF-Token": csrfToken,
+              "X-Requested-With": "XMLHttpRequest",
+              "Referer": "https://www.pixiv.net/",
+            },
+            body: JSON.stringify(requestBody),
             credentials: "include",
           });
           let bookmarkJson = await bookmarkRes.json();
-          console.log("Bookmark response:", bookmarkJson);
+          console.log("Bookmark response:", bookmarkRes.status, bookmarkJson);
           if (bookmarkJson.error) {
             sendResponse({ success: false, error: bookmarkJson.message || "Bookmark failed" });
           } else {
