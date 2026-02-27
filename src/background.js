@@ -313,13 +313,7 @@ function applyActivePreset(config) {
 
 function computeEffectiveMinus(config) {
   let globalMinus = (config.globalMinusKeywords || "").trim();
-  let presetMinus = "";
-  if (Array.isArray(config.presetMinusKeywords)) {
-    let idx = config.activePresetIndex || 0;
-    presetMinus = (config.presetMinusKeywords[idx] || "").trim();
-  }
-  let combined = [globalMinus, presetMinus].filter(Boolean).join(" ").trim();
-  return combined.replace(/\s+/g, " ");
+  return globalMinus.replace(/\s+/g, " ");
 }
 
 async function start() {
@@ -544,33 +538,20 @@ chrome.runtime.onMessage.addListener(function (
             activePresetIndex: 0,
           });
           migrateConfig(config);
-          let scope = message.scope === "global" ? "global" : "preset";
           let tag = String(message.tag || "").trim();
           if (!tag) {
             sendResponse({ success: false, error: "Invalid tag" });
             return;
           }
-
-          if (!Array.isArray(config.presetMinusKeywords)) {
-            config.presetMinusKeywords = [];
-          }
-
-          if (scope === "global") {
-            let list = (config.globalMinusKeywords || "").trim().split(/\s+/).filter(Boolean);
-            if (!list.includes(tag)) list.push(tag);
-            config.globalMinusKeywords = list.join(" ");
-          } else {
-            let idx = config.activePresetIndex || 0;
-            let list = (config.presetMinusKeywords[idx] || "").trim().split(/\s+/).filter(Boolean);
-            if (!list.includes(tag)) list.push(tag);
-            config.presetMinusKeywords[idx] = list.join(" ");
-          }
+          let list = (config.globalMinusKeywords || "").trim().split(/\s+/).filter(Boolean);
+          if (!list.includes(tag)) list.push(tag);
+          config.globalMinusKeywords = list.join(" ");
 
           applyActivePreset(config);
           config.minusKeywords = computeEffectiveMinus(config);
           await chrome.storage.local.set({
             globalMinusKeywords: config.globalMinusKeywords,
-            presetMinusKeywords: config.presetMinusKeywords,
+            presetMinusKeywords: [],
           });
 
           searchSource.updateConfig(config);

@@ -53,7 +53,7 @@ export const defaultConfig = {
   andKeywords: "",
   orKeywords: null, // legacy field, kept for migration detection
   globalMinusKeywords: "", // global minus tags (space separated)
-  presetMinusKeywords: [], // per-preset minus tags (space separated)
+  presetMinusKeywords: [], // deprecated: merged into globalMinusKeywords
 }
 
 // ── Tree Data Model ──
@@ -221,6 +221,19 @@ export function migrateConfig(config) {
     config.globalMinusKeywords = "";
   }
   if (!config.presetMinusKeywords || !Array.isArray(config.presetMinusKeywords)) {
+    config.presetMinusKeywords = [];
+  }
+
+  // Merge deprecated presetMinusKeywords into globalMinusKeywords once
+  if (Array.isArray(config.presetMinusKeywords) && config.presetMinusKeywords.length > 0) {
+    const presetParts = config.presetMinusKeywords
+      .map(s => (s || "").trim())
+      .filter(Boolean);
+    if (presetParts.length > 0) {
+      const existing = (config.globalMinusKeywords || "").trim();
+      const merged = [existing, ...presetParts].filter(Boolean).join(" ").replace(/\s+/g, " ");
+      config.globalMinusKeywords = merged;
+    }
     config.presetMinusKeywords = [];
   }
 

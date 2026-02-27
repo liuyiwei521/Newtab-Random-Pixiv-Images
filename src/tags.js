@@ -1,4 +1,4 @@
-import { defaultConfig, buildQuery, buildQueryFromTree, migrateConfig, legacyToTree, treeToLegacy } from "./config.js";
+import { defaultConfig, buildQuery, migrateConfig, legacyToTree, treeToLegacy } from "./config.js";
 
 const ext = typeof chrome !== "undefined"
   ? chrome
@@ -9,7 +9,6 @@ let queryTree = { type: "group", connector: "AND", children: [] };
 let presets = []; // Array of { name: string, tree: queryTree }
 let activePresetIndex = 0;
 let globalMinusKeywords = "";
-let presetMinusKeywords = [];
 
 // ── DOM refs ──
 const flowContainer = document.getElementById("flowContainer");
@@ -17,30 +16,8 @@ const emptyState = document.getElementById("emptyState");
 const presetSelect = document.getElementById("presetSelect");
 const presetRenameInput = document.getElementById("presetRenameInput");
 const globalMinusInput = document.getElementById("globalMinusKeywords");
-const presetMinusInput = document.getElementById("presetMinusKeywords");
 const blocklistCard = document.getElementById("blocklistCard");
 const blocklistToggle = document.getElementById("blocklistToggle");
-
-function ensurePresetMinusLength() {
-  while (presetMinusKeywords.length < presets.length) {
-    presetMinusKeywords.push("");
-  }
-  if (presetMinusKeywords.length > presets.length) {
-    presetMinusKeywords = presetMinusKeywords.slice(0, presets.length);
-  }
-}
-
-function syncCurrentPresetMinusFromInput() {
-  if (!presetMinusInput) return;
-  ensurePresetMinusLength();
-  presetMinusKeywords[activePresetIndex] = presetMinusInput.value.trim();
-}
-
-function updatePresetMinusInput() {
-  if (!presetMinusInput) return;
-  ensurePresetMinusLength();
-  presetMinusInput.value = presetMinusKeywords[activePresetIndex] || "";
-}
 
 // ── Tree Manipulation ──
 
@@ -242,14 +219,12 @@ function switchPreset(index) {
   if (presets[activePresetIndex]) {
     presets[activePresetIndex].tree = JSON.parse(JSON.stringify(queryTree));
   }
-  syncCurrentPresetMinusFromInput();
   activePresetIndex = index;
   if (presets[index]) {
     queryTree = JSON.parse(JSON.stringify(presets[index].tree));
   }
   renderPresetSelect();
   renderAll();
-  updatePresetMinusInput();
 }
 
 function addPreset(name) {
@@ -257,18 +232,15 @@ function addPreset(name) {
   if (presets[activePresetIndex]) {
     presets[activePresetIndex].tree = JSON.parse(JSON.stringify(queryTree));
   }
-  syncCurrentPresetMinusFromInput();
   const newPreset = {
     name: name || `Preset ${presets.length + 1}`,
     tree: { type: "group", connector: "AND", children: [] }
   };
   presets.push(newPreset);
-  presetMinusKeywords.push("");
   activePresetIndex = presets.length - 1;
   queryTree = JSON.parse(JSON.stringify(newPreset.tree));
   renderPresetSelect();
   renderAll();
-  updatePresetMinusInput();
 }
 
 function renamePreset(index) {
@@ -293,16 +265,12 @@ function deletePreset(index) {
     return;
   }
   presets.splice(index, 1);
-  if (presetMinusKeywords.length > 0) {
-    presetMinusKeywords.splice(index, 1);
-  }
   if (activePresetIndex >= presets.length) {
     activePresetIndex = presets.length - 1;
   }
   queryTree = JSON.parse(JSON.stringify(presets[activePresetIndex].tree));
   renderPresetSelect();
   renderAll();
-  updatePresetMinusInput();
 }
 
 function savePresetsToStorage() {
@@ -310,13 +278,12 @@ function savePresetsToStorage() {
   if (presets[activePresetIndex]) {
     presets[activePresetIndex].tree = JSON.parse(JSON.stringify(queryTree));
   }
-  syncCurrentPresetMinusFromInput();
   if (!ext || !ext.storage || !ext.storage.local) return;
   ext.storage.local.set({
     queryPresets: JSON.parse(JSON.stringify(presets)),
     activePresetIndex: activePresetIndex,
     globalMinusKeywords: globalMinusKeywords,
-    presetMinusKeywords: JSON.parse(JSON.stringify(presetMinusKeywords)),
+    presetMinusKeywords: [],
   });
 }
 
@@ -361,10 +328,7 @@ function loadTags() {
     }
 
     globalMinusKeywords = items.globalMinusKeywords || "";
-    presetMinusKeywords = Array.isArray(items.presetMinusKeywords) ? items.presetMinusKeywords : [];
-    ensurePresetMinusLength();
     if (globalMinusInput) globalMinusInput.value = globalMinusKeywords;
-    updatePresetMinusInput();
 
     renderPresetSelect();
     renderAll();
@@ -376,7 +340,6 @@ function saveTags() {
   if (presets[activePresetIndex]) {
     presets[activePresetIndex].tree = JSON.parse(JSON.stringify(queryTree));
   }
-  syncCurrentPresetMinusFromInput();
   if (globalMinusInput) {
     globalMinusKeywords = globalMinusInput.value.trim();
   }
@@ -393,7 +356,7 @@ function saveTags() {
     minusKeywords: legacy.minusKeywords,
     orKeywords: null,
     globalMinusKeywords: globalMinusKeywords,
-    presetMinusKeywords: JSON.parse(JSON.stringify(presetMinusKeywords)),
+    presetMinusKeywords: [],
   };
 
   if (!ext || !ext.storage || !ext.storage.local) {
@@ -477,10 +440,13 @@ function importFromJsonFile(file) {
       }
 
       globalMinusKeywords = data.globalMinusKeywords || "";
-      presetMinusKeywords = Array.isArray(data.presetMinusKeywords) ? data.presetMinusKeywords : [];
-      ensurePresetMinusLength();
+      if (Array.isArray(data.presetMinusKeywords) && data.presetMinusKeywords.length > 0) {
+        const extra = data.presetMinusKeywords.map(s => (s || "").trim()).filter(Boolean).join(" ");
+        if (extra) {
+          globalMinusKeywords = [globalMinusKeywords, extra].filter(Boolean).join(" ").replace(/\s+/g, " ");
+        }
+      }
       if (globalMinusInput) globalMinusInput.value = globalMinusKeywords;
-      updatePresetMinusInput();
 
       renderAll();
       showToast(
@@ -508,7 +474,7 @@ function exportToJsonFile() {
     queryPresets: JSON.parse(JSON.stringify(presets)),
     activePresetIndex: activePresetIndex,
     globalMinusKeywords: globalMinusKeywords,
-    presetMinusKeywords: JSON.parse(JSON.stringify(presetMinusKeywords)),
+    presetMinusKeywords: [],
     ...treeToLegacy(queryTree),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -678,12 +644,6 @@ if (blocklistToggle && blocklistCard) {
 if (globalMinusInput) {
   globalMinusInput.addEventListener("input", () => {
     globalMinusKeywords = globalMinusInput.value.trim();
-    updatePreview();
-  });
-}
-if (presetMinusInput) {
-  presetMinusInput.addEventListener("input", () => {
-    syncCurrentPresetMinusFromInput();
     updatePreview();
   });
 }
