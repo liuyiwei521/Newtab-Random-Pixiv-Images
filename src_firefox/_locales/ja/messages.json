@@ -135,7 +135,7 @@
     "message": "AND キーワード"
   },
   "orSectionTitle": {
-    "message": "OR キーワード"
+    "message": "OR グループ"
   },
   "minusSectionTitle": {
     "message": "除外キーワード"
@@ -196,5 +196,47 @@
   },
   "importError": {
     "message": "無効なJSONファイルです"
+  },
+  "addOrGroupLabel": {
+    "message": "OR グループを追加"
+  },
+  "emptyOrGroups": {
+    "message": "OR グループがありません。\"+ OR グループを追加\" をクリックして作成してください。"
+  },
+  "importCategoryOrNew": {
+    "message": "+ 新しいORグループ"
+  },
+  "previewTitle": {
+    "message": "🔍 クエリプレビュー"
+  },
+  "orKeywordsManageHint": {
+    "message": "OR キーワードはタグマネージャーで管理（複数ORグループ対応）"
+  },
+  "importedGroup": {
+    "message": "インポート済み"
+  },
+  "addKeywordLabel": {
+    "message": "キーワード"
+  },
+  "addGroupLabel": {
+    "message": "グループ"
+  },
+  "groupLabel": {
+    "message": "グループ（括弧）"
+  },
+  "emptyFlowState": {
+    "message": "下のボタンをクリックしてキーワードやグループを追加"
+  },
+  "presetLabel": {
+    "message": "📋 プリセット:"
+  },
+  "presetNewPrompt": {
+    "message": "プリセット名を入力:"
+  },
+  "presetRenamePrompt": {
+    "message": "新しいプリセット名を入力:"
+  },
+  "presetDeleteLast": {
+    "message": "最後のプリセットは削除できません"
   }
 }

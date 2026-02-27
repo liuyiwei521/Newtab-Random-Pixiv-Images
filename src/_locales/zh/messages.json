@@ -135,7 +135,7 @@
     "message": "AND 关键词"
   },
   "orSectionTitle": {
-    "message": "OR 关键词"
+    "message": "OR 分组"
   },
   "minusSectionTitle": {
     "message": "排除关键词"
@@ -196,5 +196,47 @@
   },
   "importError": {
     "message": "JSON 文件格式错误"
+  },
+  "addOrGroupLabel": {
+    "message": "添加 OR 分组"
+  },
+  "emptyOrGroups": {
+    "message": "暂无 OR 分组，点击 \"+ 添加 OR 分组\" 创建"
+  },
+  "importCategoryOrNew": {
+    "message": "+ 新建 OR 分组"
+  },
+  "previewTitle": {
+    "message": "🔍 查询预览"
+  },
+  "orKeywordsManageHint": {
+    "message": "OR 关键词在标签管理中设置（支持多组 OR）"
+  },
+  "importedGroup": {
+    "message": "导入"
+  },
+  "addKeywordLabel": {
+    "message": "关键词"
+  },
+  "addGroupLabel": {
+    "message": "组合"
+  },
+  "groupLabel": {
+    "message": "分组 (括号)"
+  },
+  "emptyFlowState": {
+    "message": "点击下方按钮添加关键词或分组"
+  },
+  "presetLabel": {
+    "message": "📋 方案:"
+  },
+  "presetNewPrompt": {
+    "message": "输入方案名称:"
+  },
+  "presetRenamePrompt": {
+    "message": "输入新的方案名称:"
+  },
+  "presetDeleteLast": {
+    "message": "无法删除最后一个方案"
   }
 }

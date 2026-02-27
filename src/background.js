@@ -1,4 +1,4 @@
-import { defaultConfig, getKeywords } from "./config.js";
+import { defaultConfig, getKeywords, buildQuery, migrateConfig, treeToLegacy } from "./config.js";
 
 chrome.runtime.onInstalled.addListener((details) => {
   const RULE = [
@@ -128,12 +128,15 @@ class SearchSource {
     this.totalPage = 0;
     this.itemsPerPage = 60;
     this.illustInfoPages = {};
+    this.maxCachedPages = 5; // Limit cache to avoid always picking from same pages
+    this.seenIds = new Set(); // Track recently shown IDs to avoid repeats
   }
 
   updateConfig(config) {
     this.searchParam = config;
     this.totalPage = 0;
     this.illustInfoPages = {};
+    this.seenIds.clear();
   }
 
   replaceSpecialCharacter = (function () {
@@ -157,7 +160,7 @@ class SearchSource {
   generateSearchUrl(p = 1) {
     let sp = this.searchParam;
     sp.p = p;
-    let word = getKeywords(sp.andKeywords, sp.orKeywords, sp.minusKeywords);
+    let word = buildQuery(sp);
     let firstPart = encodeURIComponent(word);
     let secondPartArray = [];
     secondPartArray.push("?word=" + this.replaceSpecialCharacter(word));
@@ -177,7 +180,7 @@ class SearchSource {
   }
 
   async getRandomIllust() {
-    const MAX_RETRIES = 5;
+    const MAX_RETRIES = 8;
     for (let i = 0; i < MAX_RETRIES; i++) {
       try {
         if (this.totalPage === 0) {
@@ -187,20 +190,39 @@ class SearchSource {
           this.totalPage = Math.ceil(total / this.itemsPerPage);
           if (this.totalPage === 0) return null;
         }
-        
-        let randomPage = getRandomInt(0, this.totalPage) + 1;
+
+        // Prefer uncached pages for variety (70% chance to pick a fresh page)
+        let randomPage;
+        const cachedKeys = Object.keys(this.illustInfoPages).map(Number);
+        const preferFresh = cachedKeys.length > 0 && Math.random() < 0.7;
+
+        if (preferFresh && cachedKeys.length < this.totalPage) {
+          // Pick a page NOT in cache
+          do {
+            randomPage = getRandomInt(0, this.totalPage) + 1;
+          } while (cachedKeys.includes(randomPage) && cachedKeys.length < this.totalPage);
+        } else {
+          randomPage = getRandomInt(0, this.totalPage) + 1;
+        }
+
         if (!this.illustInfoPages[randomPage]) {
+          // Evict a random cached page if cache is full
+          if (cachedKeys.length >= this.maxCachedPages) {
+            const evictKey = cachedKeys[getRandomInt(0, cachedKeys.length)];
+            delete this.illustInfoPages[evictKey];
+          }
+
           let pageObj = await this.searchIllustPage(randomPage);
           if (!pageObj || !pageObj.body) continue;
-          
+
           let total = pageObj.body.illust.total;
           let tp = Math.ceil(total / this.itemsPerPage);
           if (tp > this.totalPage) {
             this.totalPage = tp;
           }
-          
+
           // filter images
-          pageObj.body.illust.data = pageObj.body.illust.data.filter(
+          let pageData = pageObj.body.illust.data.filter(
             (el) => {
               let condition1 = !this.searchParam.min_sl || el.sl >= this.searchParam.min_sl;
               let condition2 = !this.searchParam.max_sl || el.sl <= this.searchParam.max_sl;
@@ -208,17 +230,40 @@ class SearchSource {
               return condition1 && condition2 && condition3;
             }
           );
-          this.illustInfoPages[randomPage] = pageObj.body.illust.data;
+
+          // Fisher-Yates shuffle for better randomness within a page
+          for (let j = pageData.length - 1; j > 0; j--) {
+            const k = getRandomInt(0, j + 1);
+            [pageData[j], pageData[k]] = [pageData[k], pageData[j]];
+          }
+
+          this.illustInfoPages[randomPage] = pageData;
         }
-        
+
         let illustArray = this.illustInfoPages[randomPage];
         if (!illustArray || illustArray.length === 0) continue;
 
-        let randomIndex = getRandomInt(0, illustArray.length);
+        // Filter out recently seen IDs
+        let candidates = illustArray.filter(el => !this.seenIds.has(el.id));
+        if (candidates.length === 0) {
+          // All seen on this page — remove from cache to force a fresh page next time
+          delete this.illustInfoPages[randomPage];
+          continue;
+        }
+
+        let randomIndex = getRandomInt(0, candidates.length);
+        let picked = candidates[randomIndex];
+
+        // Track as seen (auto-clear when set gets too large)
+        this.seenIds.add(picked.id);
+        if (this.seenIds.size > 200) {
+          this.seenIds.clear();
+        }
+
         let res = {};
-        res.illustId = illustArray[randomIndex].id;
-        res.profileImageUrl = illustArray[randomIndex].profileImageUrl;
-        
+        res.illustId = picked.id;
+        res.profileImageUrl = picked.profileImageUrl;
+
         let illustInfo = await fetchPixivJson(baseUrl + illustInfoUrl + res.illustId);
         if (!illustInfo || !illustInfo.body) continue;
 
@@ -229,21 +274,26 @@ class SearchSource {
         res.illustIdUrl = baseUrl + "/artworks/" + illustInfo.body.illustId;
         res.title = illustInfo.body.title;
         res.imageObjectUrl = illustInfo.body.urls.regular;
-        
+        // Extract tags for frontend
+        res.tags = (illustInfo.body.tags && illustInfo.body.tags.tags || []).map(t => ({
+          tag: t.tag,
+          translation: t.translation && t.translation.en || null
+        }));
+
         let [imgBlob, profileBlob] = await Promise.all([
           fetchImage(res.imageObjectUrl),
           fetchImage(res.profileImageUrl)
         ]);
-        
+
         if (!imgBlob) continue;
         res.imageObjectUrl = await blobToDataUrl(imgBlob);
-        
+
         if (profileBlob) {
-             try {
-                res.profileImageUrl = await blobToDataUrl(profileBlob);
-             } catch (e) {
-                // ignore profile image error
-             }
+          try {
+            res.profileImageUrl = await blobToDataUrl(profileBlob);
+          } catch (e) {
+            // ignore profile image error
+          }
         }
         return res;
       } catch (e) {
@@ -285,11 +335,14 @@ function fillQueue() {
 
 async function start() {
   let config = await chrome.storage.local.get(defaultConfig);
+  migrateConfig(config);
+  // Persist migrated config if orKeywords was converted
+  chrome.storage.local.set({ orGroups: config.orGroups, orKeywords: null });
   searchSource = new SearchSource(config);
   let queue_cache = await chrome.storage.session.get("illustQueue");
-  
+
   if (Object.keys(queue_cache).length === 0) {
-    illust_queue = new Queue(2);
+    illust_queue = new Queue(4);
   } else {
     illust_queue = Object.setPrototypeOf(queue_cache.illustQueue, Queue.prototype)
   }
@@ -323,10 +376,87 @@ chrome.runtime.onMessage.addListener(function (
         fillQueue();
       } else if (message.action === "updateConfig") {
         let config = await chrome.storage.local.get(defaultConfig);
+        migrateConfig(config);
         searchSource.updateConfig(config);
-        illust_queue = new Queue(2);
+        illust_queue = new Queue(4);
         chrome.storage.session.set({ illustQueue: illust_queue });
         fillQueue();
+      } else if (message.action === "bookmarkIllust") {
+        try {
+          // Fetch CSRF token from pixiv.net page
+          let pageRes = await fetch("https://www.pixiv.net/");
+          let pageText = await pageRes.text();
+          let tokenMatch = pageText.match(/"token":"([^"]+)"/);
+          if (!tokenMatch) {
+            sendResponse({ success: false, error: "Could not get CSRF token. Please login to Pixiv." });
+            return;
+          }
+          let csrfToken = tokenMatch[1];
+
+          let bookmarkRes = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrfToken,
+            },
+            body: JSON.stringify({
+              illust_id: message.illustId,
+              restrict: 0,
+              comment: "",
+              tags: [],
+            }),
+            credentials: "include",
+          });
+          let bookmarkJson = await bookmarkRes.json();
+          if (bookmarkJson.error) {
+            sendResponse({ success: false, error: bookmarkJson.message || "Bookmark failed" });
+          } else {
+            sendResponse({ success: true });
+          }
+        } catch (e) {
+          console.error("Bookmark error:", e);
+          sendResponse({ success: false, error: e.message });
+        }
+      } else if (message.action === "excludeTag") {
+        try {
+          let config = await chrome.storage.local.get({
+            ...defaultConfig,
+            queryPresets: null,
+            activePresetIndex: 0,
+          });
+          migrateConfig(config);
+
+          let tree = config.queryTree || { type: "group", connector: "AND", children: [] };
+          // Add negated tag
+          tree.children.push({ type: "tag", value: message.tag, negated: true });
+
+          let legacy = treeToLegacy(tree);
+          let saveData = {
+            queryTree: tree,
+            andKeywords: legacy.andKeywords,
+            orGroups: legacy.orGroups,
+            minusKeywords: legacy.minusKeywords,
+          };
+
+          // Also update active preset if presets exist
+          if (config.queryPresets && Array.isArray(config.queryPresets) && config.queryPresets.length > 0) {
+            let idx = config.activePresetIndex || 0;
+            if (idx < config.queryPresets.length) {
+              config.queryPresets[idx].tree = JSON.parse(JSON.stringify(tree));
+            }
+            saveData.queryPresets = config.queryPresets;
+          }
+
+          await chrome.storage.local.set(saveData);
+          searchSource.updateConfig({ ...config, ...saveData });
+          illust_queue = new Queue(4);
+          chrome.storage.session.set({ illustQueue: illust_queue });
+          fillQueue();
+          sendResponse({ success: true });
+        } catch (e) {
+          console.error("Exclude tag error:", e);
+          sendResponse({ success: false, error: e.message });
+        }
       }
     }
   )();
