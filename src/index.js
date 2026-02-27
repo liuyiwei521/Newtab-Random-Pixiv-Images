@@ -78,7 +78,11 @@
       });
       refreshElement.addEventListener("click", sendRefreshMessage);
       settingsElement.addEventListener("click", () => {
-        window.open(chrome.runtime.getURL("tags.html"), "_blank");
+        if (chrome && chrome.tabs && chrome.tabs.create) {
+          chrome.tabs.create({ url: chrome.runtime.getURL("tags.html") });
+        } else {
+          window.open(chrome.runtime.getURL("tags.html"), "_blank");
+        }
       });
 
       // Like button
@@ -256,21 +260,13 @@
 
   const sendRefreshMessage = (() => {
     let isRequestInProgress = false;
-    let safetyTimer = null;
     return () => {
       if (isRequestInProgress) {
         return;
       }
       isRequestInProgress = true;
       console.log("Refresh: sending fetchImage");
-      // Safety timeout: force-unlock after 30s in case response never comes
-      clearTimeout(safetyTimer);
-      safetyTimer = setTimeout(() => {
-        console.warn("Refresh safety timeout — force unlocking");
-        isRequestInProgress = false;
-      }, 30000);
       chrome.runtime.sendMessage({ action: "fetchImage" }, (res) => {
-        clearTimeout(safetyTimer);
         if (chrome.runtime.lastError) {
           console.warn("Context invalidated, message could not be processed:", chrome.runtime.lastError.message);
           isRequestInProgress = false;

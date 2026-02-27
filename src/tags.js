@@ -1,5 +1,9 @@
 import { defaultConfig, buildQuery, buildQueryFromTree, migrateConfig, legacyToTree, treeToLegacy } from "./config.js";
 
+const ext = typeof chrome !== "undefined"
+  ? chrome
+  : (typeof browser !== "undefined" ? browser : null);
+
 // ── State ──
 let queryTree = { type: "group", connector: "AND", children: [] };
 let presets = []; // Array of { name: string, tree: queryTree }
@@ -11,8 +15,11 @@ let presetMinusKeywords = [];
 const flowContainer = document.getElementById("flowContainer");
 const emptyState = document.getElementById("emptyState");
 const presetSelect = document.getElementById("presetSelect");
+const presetRenameInput = document.getElementById("presetRenameInput");
 const globalMinusInput = document.getElementById("globalMinusKeywords");
 const presetMinusInput = document.getElementById("presetMinusKeywords");
+const blocklistCard = document.getElementById("blocklistCard");
+const blocklistToggle = document.getElementById("blocklistToggle");
 
 function ensurePresetMinusLength() {
   while (presetMinusKeywords.length < presets.length) {
@@ -267,16 +274,12 @@ function addPreset(name) {
 function renamePreset(index) {
   const current = presets[index];
   if (!current) return;
-  const newName = prompt(
-    _translations["presetRenamePrompt"]
-      ? _translations["presetRenamePrompt"].message
-      : "Enter new preset name:",
-    current.name
-  );
-  if (newName && newName.trim()) {
-    current.name = newName.trim();
-    renderPresetSelect();
-  }
+  if (!presetRenameInput || !presetSelect) return;
+  presetRenameInput.value = current.name || "";
+  presetRenameInput.classList.add("active");
+  presetSelect.style.display = "none";
+  presetRenameInput.focus();
+  presetRenameInput.select();
 }
 
 function deletePreset(index) {
@@ -308,7 +311,8 @@ function savePresetsToStorage() {
     presets[activePresetIndex].tree = JSON.parse(JSON.stringify(queryTree));
   }
   syncCurrentPresetMinusFromInput();
-  chrome.storage.local.set({
+  if (!ext || !ext.storage || !ext.storage.local) return;
+  ext.storage.local.set({
     queryPresets: JSON.parse(JSON.stringify(presets)),
     activePresetIndex: activePresetIndex,
     globalMinusKeywords: globalMinusKeywords,
@@ -319,20 +323,23 @@ function savePresetsToStorage() {
 // ── Preview ──
 
 function updatePreview() {
-  const previewEl = document.getElementById("queryPreview");
-  if (previewEl) {
-    const effectiveMinus = [globalMinusKeywords, presetMinusKeywords[activePresetIndex] || ""]
-      .join(" ")
-      .trim();
-    const word = buildQuery({ queryTree, minusKeywords: effectiveMinus });
-    previewEl.textContent = word || "(empty)";
-  }
+  // Preview removed
 }
 
 // ── Storage ──
 
 function loadTags() {
-  chrome.storage.local.get({
+  if (!ext || !ext.storage || !ext.storage.local) {
+    console.error("Chrome storage unavailable.", {
+      href: location.href,
+      chromeDefined: typeof chrome !== "undefined",
+      storageDefined: typeof chrome !== "undefined" && !!chrome.storage,
+      runtimeId: ext && ext.runtime ? ext.runtime.id : null,
+    });
+    showToast("Chrome storage unavailable. Open from extension.", "error");
+    return;
+  }
+  ext.storage.local.get({
     ...defaultConfig,
     queryPresets: null,
     activePresetIndex: 0,
@@ -389,7 +396,11 @@ function saveTags() {
     presetMinusKeywords: JSON.parse(JSON.stringify(presetMinusKeywords)),
   };
 
-  chrome.storage.local.set(newValues, () => {
+  if (!ext || !ext.storage || !ext.storage.local) {
+    showToast("Chrome storage unavailable. Open from extension.", "error");
+    return;
+  }
+  ext.storage.local.set(newValues, () => {
     showToast(
       _translations["tagsSaved"]
         ? _translations["tagsSaved"].message
@@ -398,11 +409,15 @@ function saveTags() {
     );
   });
 
-  chrome.runtime.sendMessage({ action: "updateConfig" }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.log(chrome.runtime.lastError.message);
-    }
-  });
+  if (ext && ext.runtime && ext.runtime.sendMessage) {
+    ext.runtime.sendMessage({ action: "updateConfig" }, (response) => {
+      if (ext.runtime.lastError) {
+        console.log(ext.runtime.lastError.message);
+      }
+    });
+  } else {
+    console.warn("Extension runtime unavailable, updateConfig not sent.");
+  }
 
   updatePreview();
 }
@@ -441,16 +456,31 @@ function importFromJsonFile(file) {
     try {
       const data = JSON.parse(e.target.result);
 
-      if (data.queryTree && data.queryTree.type === "group") {
+      // Presets
+      if (Array.isArray(data.queryPresets) && data.queryPresets.length > 0) {
+        presets = data.queryPresets;
+        activePresetIndex = Math.min(data.activePresetIndex || 0, presets.length - 1);
+        queryTree = JSON.parse(JSON.stringify(presets[activePresetIndex].tree || { type: "group", connector: "AND", children: [] }));
+      } else if (data.queryTree && data.queryTree.type === "group") {
         queryTree = data.queryTree;
+        presets = [{ name: "Default", tree: JSON.parse(JSON.stringify(queryTree)) }];
+        activePresetIndex = 0;
       } else {
         const tree = legacyToTree(
           data.andKeywords || "",
           data.orGroups || [],
           data.minusKeywords || ""
         );
-        tree.children.forEach(child => queryTree.children.push(child));
+        queryTree = tree;
+        presets = [{ name: "Default", tree: JSON.parse(JSON.stringify(queryTree)) }];
+        activePresetIndex = 0;
       }
+
+      globalMinusKeywords = data.globalMinusKeywords || "";
+      presetMinusKeywords = Array.isArray(data.presetMinusKeywords) ? data.presetMinusKeywords : [];
+      ensurePresetMinusLength();
+      if (globalMinusInput) globalMinusInput.value = globalMinusKeywords;
+      updatePresetMinusInput();
 
       renderAll();
       showToast(
@@ -475,6 +505,10 @@ function importFromJsonFile(file) {
 function exportToJsonFile() {
   const data = {
     queryTree: JSON.parse(JSON.stringify(queryTree)),
+    queryPresets: JSON.parse(JSON.stringify(presets)),
+    activePresetIndex: activePresetIndex,
+    globalMinusKeywords: globalMinusKeywords,
+    presetMinusKeywords: JSON.parse(JSON.stringify(presetMinusKeywords)),
     ...treeToLegacy(queryTree),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -536,7 +570,6 @@ function loadTranslations(lang) {
       document.querySelectorAll("[id]").forEach((el) => {
         if (data[el.id] && !el.closest(".flow-builder") && !el.closest(".preset-bar")) {
           if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") return;
-          if (el.id === "queryPreview") return;
           el.textContent = data[el.id].message;
         }
       });
@@ -571,15 +604,13 @@ presetSelect.addEventListener("change", (e) => {
 });
 
 document.getElementById("presetNewBtn").addEventListener("click", () => {
-  const name = prompt(
-    _translations["presetNewPrompt"]
-      ? _translations["presetNewPrompt"].message
-      : "Enter preset name:",
-    `Preset ${presets.length + 1}`
+  addPreset();
+  showToast(
+    _translations["presetCreated"]
+      ? _translations["presetCreated"].message
+      : "Preset created",
+    "success"
   );
-  if (name && name.trim()) {
-    addPreset(name.trim());
-  }
 });
 
 document.getElementById("presetRenameBtn").addEventListener("click", () => {
@@ -589,6 +620,28 @@ document.getElementById("presetRenameBtn").addEventListener("click", () => {
 document.getElementById("presetDeleteBtn").addEventListener("click", () => {
   deletePreset(activePresetIndex);
 });
+
+if (presetRenameInput && presetSelect) {
+  const commitRename = () => {
+    const val = presetRenameInput.value.trim();
+    if (val && presets[activePresetIndex]) {
+      presets[activePresetIndex].name = val;
+    }
+    presetRenameInput.classList.remove("active");
+    presetSelect.style.display = "";
+    renderPresetSelect();
+  };
+
+  presetRenameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") commitRename();
+    if (e.key === "Escape") {
+      presetRenameInput.classList.remove("active");
+      presetSelect.style.display = "";
+    }
+  });
+
+  presetRenameInput.addEventListener("blur", commitRename);
+}
 
 // Save
 document.getElementById("saveBtn").addEventListener("click", saveTags);
@@ -614,6 +667,13 @@ document.getElementById("exportBtn").addEventListener("click", exportToJsonFile)
 document.getElementById("importModal").addEventListener("click", (e) => {
   if (e.target === e.currentTarget) closeImportModal();
 });
+
+if (blocklistToggle && blocklistCard) {
+  blocklistToggle.addEventListener("click", () => {
+    const isCollapsed = blocklistCard.classList.toggle("collapsed");
+    blocklistToggle.textContent = isCollapsed ? "Show" : "Hide";
+  });
+}
 
 if (globalMinusInput) {
   globalMinusInput.addEventListener("input", () => {

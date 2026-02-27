@@ -1,144 +1,9 @@
 {
-  "keywordsLabel": {
-    "message": "キーワード"
-  },
-  "andKeywordsLabel": {
-    "message": "キーワードをすべて含む"
-  },
-  "orKeywordsLabel": {
-    "message": "キーワードのいずれかを含む"
-  },
-  "minusKeywordsLabel": {
-    "message": "キーワードを含まない"
-  },
-  "keywordsTip": {
-    "message": "スペース区切りで複数のキーワードを指定できます"
-  },
-  "orderLabel": {
-    "message": "並べ替え"
-  },
-  "date_dOrder": {
-    "message": "新しい順"
-  },
-  "dateOrder": {
-    "message": "古い順"
-  },
-  "popular_dOrder": {
-    "message": "全体の人気順 (Pixivプレミアム会員限定)"
-  },
-  "popular_male_dOrder": {
-    "message": "男性の人気順 (Pixivプレミアム会員限定)"
-  },
-  "popular_female_dOrder": {
-    "message": "女性の人気順 (Pixivプレミアム会員限定)"
-  },
-  "modeLabel": {
-    "message": "検索モード"
-  },
-  "allMode": {
-    "message": "すべて"
-  },
-  "r18Mode": {
-    "message": "R-18"
-  },
-  "safeMode": {
-    "message": "全年齢"
-  },
-  "timeOptionLabel": {
-    "message": "期間"
-  },
-  "unlimitedTimeOption": {
-    "message": "すべての期間"
-  },
-  "specificTimeOption": {
-    "message": "日付を指定"
-  },
-  "scdLabel": {
-    "message": "開始日"
-  },
-  "ecdLabel": {
-    "message": "終了日"
-  },
-  "bookmarksLabel": {
-    "message": "ブックマーク数 (Pixivプレミアム会員限定)"
-  },
-  "bltLabel": {
-    "message": "最小ブックマーク数 (Pixivプレミアム会員限定)"
-  },
-  "bgtLabel": {
-    "message": "最大ブックマーク数 (Pixivプレミアム会員限定)"
-  },
-  "s_modeLabel": {
-    "message": "タグ検索モード"
-  },
-  "s_tagOption": {
-    "message": "タグ（部分一致）"
-  },
-  "s_tag_fullOption": {
-    "message": "タグ（完全一致）"
-  },
-  "s_tcOption": {
-    "message": "タイトル・キャプション"
-  },
-  "typeLabel": {
-    "message": "画像タイプ検索モード"
-  },
-  "allTypeLabel": {
-    "message": "イラスト・マンガ・うごくイラスト"
-  },
-  "illust_and_ugoiraTypeLabel": {
-    "message": "イラスト・うごくイラスト"
-  },
-  "illustTypeLabel": {
-    "message": "イラスト"
-  },
-  "mangaTypeLabel": {
-    "message": "マンガ"
-  },
-  "ugoiraTypeLabel": {
-    "message": "うごくイラスト"
-  },
-  "leave_blank_for_unlimited": {
-    "message": "空欄で無制限"
-  },
-  "slLabel": {
-    "message": "sl フィルター (pixiv 安全レベル, 2=安全, 6=非安全)"
-  },
-  "min_sl": {
-    "message": "最小 sl"
-  },
-  "max_sl": {
-    "message": "最大 sl"
-  },
-  "aiTypeLabel": {
-    "message": "AI タイプ (1=非AI, 2=AI生成, 空欄=未設定)"
-  },
-  "save": {
-    "message": "保存"
-  },
-  "reset": {
-    "message": "リセット"
-  },
-  "tagManagerLink": {
-    "message": "🏷️ タグ管理"
-  },
   "pageTitle": {
     "message": "タグ管理"
   },
   "pageSubtitle": {
     "message": "Pixiv 検索キーワードを視覚的に管理"
-  },
-  "backToOptions": {
-    "message": "設定に戻る"
-  },
-  "andSectionTitle": {
-    "message": "AND キーワード"
-  },
-  "orSectionTitle": {
-    "message": "OR グループ"
-  },
-  "minusSectionTitle": {
-    "message": "除外キーワード"
   },
   "addTagPlaceholder": {
     "message": "タグを追加..."
@@ -164,15 +29,6 @@
   "modalDesc": {
     "message": "キーワードを貼り付けてください（スペース、カンマ、改行で区切り）"
   },
-  "importCategoryAnd": {
-    "message": "AND キーワード"
-  },
-  "importCategoryOr": {
-    "message": "OR キーワード"
-  },
-  "importCategoryMinus": {
-    "message": "除外キーワード"
-  },
   "importPlaceholder": {
     "message": "タグ1, タグ2, タグ3..."
   },
@@ -181,9 +37,6 @@
   },
   "modalConfirmBtn": {
     "message": "インポート"
-  },
-  "emptyTags": {
-    "message": "タグがありません"
   },
   "tagsSaved": {
     "message": "タグを保存しました！"
@@ -197,23 +50,8 @@
   "importError": {
     "message": "無効なJSONファイルです"
   },
-  "addOrGroupLabel": {
-    "message": "OR グループを追加"
-  },
-  "emptyOrGroups": {
-    "message": "OR グループがありません。\"+ OR グループを追加\" をクリックして作成してください。"
-  },
-  "importCategoryOrNew": {
-    "message": "+ 新しいORグループ"
-  },
   "previewTitle": {
     "message": "🔍 クエリプレビュー"
-  },
-  "orKeywordsManageHint": {
-    "message": "OR キーワードはタグマネージャーで管理（複数ORグループ対応）"
-  },
-  "importedGroup": {
-    "message": "インポート済み"
   },
   "addKeywordLabel": {
     "message": "キーワード"
@@ -223,9 +61,6 @@
   },
   "groupLabel": {
     "message": "グループ（括弧）"
-  },
-  "emptyFlowState": {
-    "message": "下のボタンをクリックしてキーワードやグループを追加"
   },
   "presetLabel": {
     "message": "📋 プリセット:"
@@ -238,5 +73,8 @@
   },
   "presetDeleteLast": {
     "message": "最後のプリセットは削除できません"
+  },
+  "presetCreated": {
+    "message": "プリセットを作成しました"
   }
 }

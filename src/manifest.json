@@ -20,6 +20,5 @@
   "host_permissions": [
     "*://*.pixiv.net/*",
     "*://*.pximg.net/*"
-  ],
-  "options_page": "options.html"
+  ]
 }

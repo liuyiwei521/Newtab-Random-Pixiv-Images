@@ -1,144 +1,9 @@
 {
-  "keywordsLabel": {
-    "message": "完整关键词"
-  },
-  "andKeywordsLabel": {
-    "message": "含有全部关键词(AND搜索)"
-  },
-  "orKeywordsLabel": {
-    "message": "含有某个关键词(OR搜索)"
-  },
-  "minusKeywordsLabel": {
-    "message": "不含有关键词(排除搜索)"
-  },
-  "keywordsTip": {
-    "message": "多个关键词用空格隔开"
-  },
-  "orderLabel": {
-    "message": "排序方式"
-  },
-  "date_dOrder": {
-    "message": "按最新排序"
-  },
-  "dateOrder": {
-    "message": "按旧排序"
-  },
-  "popular_dOrder": {
-    "message": "按热门度排序(是pixiv高级会员才有效)"
-  },
-  "popular_male_dOrder": {
-    "message": "受男性欢迎(是pixiv高级会员才有效)"
-  },
-  "popular_female_dOrder": {
-    "message": "受女性欢迎(是pixiv高级会员才有效)"
-  },
-  "modeLabel": {
-    "message": "搜索模式"
-  },
-  "allMode": {
-    "message": "全部"
-  },
-  "r18Mode": {
-    "message": "R18"
-  },
-  "safeMode": {
-    "message": "全年龄"
-  },
-  "timeOptionLabel": {
-    "message": "时间"
-  },
-  "unlimitedTimeOption": {
-    "message": "不限时间"
-  },
-  "specificTimeOption": {
-    "message": "指定时间"
-  },
-  "scdLabel": {
-    "message": "开始时间"
-  },
-  "ecdLabel": {
-    "message": "结束时间"
-  },
-  "bookmarksLabel": {
-    "message": "收藏数(是pixiv高级会员才有效)"
-  },
-  "bltLabel": {
-    "message": "最低收藏数(是pixiv高级会员才有效)"
-  },
-  "bgtLabel": {
-    "message": "最高收藏数(是pixiv高级会员才有效)"
-  },
-  "s_modeLabel": {
-    "message": "标签搜索模式"
-  },
-  "s_tagOption": {
-    "message": "标签(部分一致)"
-  },
-  "s_tag_fullOption": {
-    "message": "标签(完全一致)"
-  },
-  "s_tcOption": {
-    "message": "标题、说明文字"
-  },
-  "typeLabel": {
-    "message": "图片类型搜索模式"
-  },
-  "allTypeLabel": {
-    "message": "插画、漫画、动图"
-  },
-  "illust_and_ugoiraTypeLabel": {
-    "message": "插画、动图"
-  },
-  "illustTypeLabel": {
-    "message": "插画"
-  },
-  "mangaTypeLabel": {
-    "message": "漫画"
-  },
-  "ugoiraTypeLabel": {
-    "message": "动图"
-  },
-  "leave_blank_for_unlimited": {
-    "message": "留空表示不限"
-  },
-  "slLabel": {
-    "message": "sl 过滤(pixiv 安全等级, 2 为安全, 6 为不安全)"
-  },
-  "min_sl": {
-    "message": "最小 sl"
-  },
-  "max_sl": {
-    "message": "最大 sl"
-  },
-  "aiTypeLabel": {
-    "message": "AI 类型 (1 非AI, 2 AI生成, 留空不限)"
-  },
-  "save": {
-    "message": "保存"
-  },
-  "reset": {
-    "message": "重置"
-  },
-  "tagManagerLink": {
-    "message": "🏷️ 标签管理"
-  },
   "pageTitle": {
     "message": "标签管理"
   },
   "pageSubtitle": {
     "message": "可视化管理 Pixiv 搜索关键词"
-  },
-  "backToOptions": {
-    "message": "返回设置"
-  },
-  "andSectionTitle": {
-    "message": "AND 关键词"
-  },
-  "orSectionTitle": {
-    "message": "OR 分组"
-  },
-  "minusSectionTitle": {
-    "message": "排除关键词"
   },
   "addTagPlaceholder": {
     "message": "输入标签..."
@@ -164,15 +29,6 @@
   "modalDesc": {
     "message": "粘贴关键词（以空格、逗号或换行分隔）"
   },
-  "importCategoryAnd": {
-    "message": "AND 关键词"
-  },
-  "importCategoryOr": {
-    "message": "OR 关键词"
-  },
-  "importCategoryMinus": {
-    "message": "排除关键词"
-  },
   "importPlaceholder": {
     "message": "标签1, 标签2, 标签3..."
   },
@@ -181,9 +37,6 @@
   },
   "modalConfirmBtn": {
     "message": "导入"
-  },
-  "emptyTags": {
-    "message": "暂无标签"
   },
   "tagsSaved": {
     "message": "标签已保存！"
@@ -197,23 +50,8 @@
   "importError": {
     "message": "JSON 文件格式错误"
   },
-  "addOrGroupLabel": {
-    "message": "添加 OR 分组"
-  },
-  "emptyOrGroups": {
-    "message": "暂无 OR 分组，点击 \"+ 添加 OR 分组\" 创建"
-  },
-  "importCategoryOrNew": {
-    "message": "+ 新建 OR 分组"
-  },
   "previewTitle": {
     "message": "🔍 查询预览"
-  },
-  "orKeywordsManageHint": {
-    "message": "OR 关键词在标签管理中设置（支持多组 OR）"
-  },
-  "importedGroup": {
-    "message": "导入"
   },
   "addKeywordLabel": {
     "message": "关键词"
@@ -223,9 +61,6 @@
   },
   "groupLabel": {
     "message": "分组 (括号)"
-  },
-  "emptyFlowState": {
-    "message": "点击下方按钮添加关键词或分组"
   },
   "presetLabel": {
     "message": "📋 方案:"
@@ -238,5 +73,8 @@
   },
   "presetDeleteLast": {
     "message": "无法删除最后一个方案"
+  },
+  "presetCreated": {
+    "message": "已创建预设"
   }
 }

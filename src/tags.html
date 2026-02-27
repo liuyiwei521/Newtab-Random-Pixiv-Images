@@ -38,6 +38,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            height: 100%;
         }
 
         .scroll-area {
@@ -45,6 +46,7 @@
             overflow-y: auto;
             overflow-x: hidden;
             padding-right: 4px;
+            min-height: 0;
         }
 
         .scroll-area::-webkit-scrollbar {
@@ -113,6 +115,22 @@
             outline: none;
             cursor: pointer;
             min-width: 0;
+        }
+
+        .preset-rename-input {
+            flex: 1;
+            background: #252540;
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 13px;
+            outline: none;
+            display: none;
+        }
+
+        .preset-rename-input.active {
+            display: block;
         }
 
         .preset-bar .btn-preset {
@@ -200,10 +218,18 @@
             margin-bottom: 12px;
         }
 
+        .blocklist-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
         .blocklist-card h3 {
             font-size: 13px;
             color: #cfcfe8;
-            margin-bottom: 8px;
+            margin-bottom: 0;
         }
 
         .blocklist-row {
@@ -231,6 +257,26 @@
         .blocklist-tip {
             font-size: 11px;
             color: #666;
+        }
+
+        .blocklist-toggle {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #bbb;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .blocklist-toggle:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+
+        .blocklist-card.collapsed .blocklist-body {
+            display: none;
         }
 
         .flow-container {
@@ -503,34 +549,6 @@
             color: #555;
         }
 
-        /* Query Preview */
-        .query-preview {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 10px;
-            padding: 14px;
-            margin-bottom: 16px;
-        }
-
-        .query-preview h3 {
-            font-size: 13px;
-            color: #888;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
-        .query-preview code {
-            display: block;
-            padding: 10px 14px;
-            background: #0d0d1a;
-            border-radius: 8px;
-            font-family: 'SF Mono', 'Fira Code', monospace;
-            font-size: 12px;
-            color: #b39ddb;
-            word-break: break-all;
-            white-space: pre-wrap;
-            line-height: 1.5;
-        }
 
         .toolbar {
             display: flex;
@@ -786,7 +804,7 @@
 <body>
     <div class="container">
         <div class="top-bar">
-            <a class="back-link" href="options.html">← <span id="backToOptions">Back to Options</span></a>
+            <a class="back-link" href="index.html">← <span id="backToNewtab">Back to New Tab</span></a>
             <div class="lang-select">
                 <span>🌐</span>
                 <select id="languageSelect">
@@ -805,23 +823,29 @@
             <div class="preset-bar">
                 <label id="presetLabel">📋 Preset:</label>
                 <select id="presetSelect"></select>
+                <input id="presetRenameInput" class="preset-rename-input" type="text" />
                 <button class="btn-preset" id="presetNewBtn">+ New</button>
                 <button class="btn-preset" id="presetRenameBtn">✏️</button>
                 <button class="btn-preset btn-preset-danger" id="presetDeleteBtn">🗑</button>
             </div>
 
             <!-- Blocklist -->
-            <div class="blocklist-card">
-                <h3>🚫 Blocklist</h3>
-                <div class="blocklist-row">
-                    <label for="globalMinusKeywords">Global blocklist (space separated)</label>
-                    <input type="text" id="globalMinusKeywords" placeholder="tag1 tag2 tag3" />
+            <div class="blocklist-card collapsed" id="blocklistCard">
+                <div class="blocklist-header">
+                    <h3>🚫 Blocklist</h3>
+                    <button class="blocklist-toggle" id="blocklistToggle">Show</button>
                 </div>
-                <div class="blocklist-row">
-                    <label for="presetMinusKeywords">Current preset blocklist</label>
-                    <input type="text" id="presetMinusKeywords" placeholder="tag1 tag2 tag3" />
+                <div class="blocklist-body">
+                    <div class="blocklist-row">
+                        <label for="globalMinusKeywords">Global blocklist (space separated)</label>
+                        <input type="text" id="globalMinusKeywords" placeholder="tag1 tag2 tag3" />
+                    </div>
+                    <div class="blocklist-row">
+                        <label for="presetMinusKeywords">Current preset blocklist</label>
+                        <input type="text" id="presetMinusKeywords" placeholder="tag1 tag2 tag3" />
+                    </div>
+                    <div class="blocklist-tip">Global + preset blocklists are merged when searching.</div>
                 </div>
-                <div class="blocklist-tip">Global + preset blocklists are merged when searching.</div>
             </div>
 
             <!-- Capsule Flow Builder -->
@@ -839,12 +863,6 @@
                 <button class="btn-action btn-add-group" id="addGroupBtn">
                     🔗 <span id="addGroupLabel">Group</span>
                 </button>
-            </div>
-
-            <!-- Query Preview -->
-            <div class="query-preview">
-                <h3 id="previewTitle">🔍 Query Preview</h3>
-                <code id="queryPreview">(empty)</code>
             </div>
 
             <!-- Toolbar: Import / Export -->
