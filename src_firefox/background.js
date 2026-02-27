@@ -352,21 +352,32 @@ browser.runtime.onMessage.addListener(function (
         fillQueue();
       } else if (message.action === "bookmarkIllust") {
         try {
-          let pageRes = await fetch("https://www.pixiv.net/");
+          let pageRes = await fetch("https://www.pixiv.net/", { credentials: "include" });
           let pageText = await pageRes.text();
-          let tokenMatch = pageText.match(/"token":"([^"]+)"/);
-          if (!tokenMatch) {
+          let tokenMatch = pageText.match(/"token"\s*:\s*"([^"]+)"/)
+            || pageText.match(/name="csrf-token"\s+content="([^"]+)"/)
+            || pageText.match(/meta-global-data[^>]*content='([^']*token[^']*)'/);
+          let csrfToken = null;
+          if (tokenMatch) {
+            csrfToken = tokenMatch[1];
+            if (csrfToken.includes("{")) {
+              try { csrfToken = JSON.parse(csrfToken).token || null; } catch (e) { csrfToken = null; }
+            }
+          }
+          if (!csrfToken) {
+            console.error("CSRF token not found. Page length:", pageText.length);
             sendResponse({ success: false, error: "Could not get CSRF token. Please login to Pixiv." });
             return;
           }
-          let csrfToken = tokenMatch[1];
+          let illustId = String(message.illustId);
           let bookmarkRes = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-            body: JSON.stringify({ illust_id: message.illustId, restrict: 0, comment: "", tags: [] }),
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, "Referer": "https://www.pixiv.net/" },
+            body: JSON.stringify({ illust_id: illustId, restrict: 0, comment: "", tags: [] }),
             credentials: "include",
           });
           let bookmarkJson = await bookmarkRes.json();
+          console.log("Bookmark response:", bookmarkJson);
           if (bookmarkJson.error) {
             sendResponse({ success: false, error: bookmarkJson.message || "Bookmark failed" });
           } else {
