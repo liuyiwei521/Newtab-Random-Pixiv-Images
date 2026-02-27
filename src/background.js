@@ -34,6 +34,13 @@ chrome.runtime.onInstalled.addListener((details) => {
             "operation": "set",
             "value": "https://www.pixiv.net/"
           }
+        ],
+        "responseHeaders": [
+          {
+            "header": "Access-Control-Allow-Origin",
+            "operation": "set",
+            "value": "*"
+          }
         ]
       },
       "condition": {
