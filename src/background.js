@@ -398,67 +398,95 @@ chrome.runtime.onMessage.addListener(function (
         fillQueue();
       } else if (message.action === "bookmarkIllust") {
         try {
-          // Get pixiv.net cookies manually (SameSite=Lax cookies won't be sent automatically from extension)
-          let cookies = await chrome.cookies.getAll({ domain: ".pixiv.net" });
-          let cookieStr = cookies.map(c => `${c.name}=${c.value}`).join("; ");
-          if (!cookieStr || !cookies.some(c => c.name === "PHPSESSID")) {
-            sendResponse({ success: false, error: "Not logged in to Pixiv. Please login at pixiv.net first." });
-            return;
-          }
-          console.log("Pixiv cookies found:", cookies.length, "items");
-
-          // Fetch CSRF token from pixiv.net page (with cookies)
-          let pageRes = await fetch("https://www.pixiv.net/", {
-            headers: { "Cookie": cookieStr },
-          });
-          let pageText = await pageRes.text();
-          // Try multiple patterns to find CSRF token
-          let tokenMatch = pageText.match(/"token"\s*:\s*"([^"]+)"/)
-            || pageText.match(/name="csrf-token"\s+content="([^"]+)"/)
-            ;
-          let csrfToken = tokenMatch ? tokenMatch[1] : null;
-          if (!csrfToken) {
-            console.error("CSRF token not found. Page length:", pageText.length);
-            // Try extracting from meta-global-data JSON
-            let metaMatch = pageText.match(/id="meta-global-data"\s+content='([^']+)'/);
-            if (metaMatch) {
-              try {
-                let parsed = JSON.parse(metaMatch[1]);
-                csrfToken = parsed.token;
-              } catch (e) { /* ignore */ }
-            }
-          }
-          if (!csrfToken) {
-            sendResponse({ success: false, error: "Could not get CSRF token. Please login to Pixiv." });
-            return;
+          // Find an existing Pixiv tab to inject into
+          let tabs = await chrome.tabs.query({ url: "*://*.pixiv.net/*" });
+          let tabId;
+          if (tabs.length > 0) {
+            tabId = tabs[0].id;
+          } else {
+            // Open a Pixiv tab in background, wait for it to load
+            let tab = await chrome.tabs.create({ url: "https://www.pixiv.net/", active: false });
+            tabId = tab.id;
+            // Wait for the tab to finish loading
+            await new Promise((resolve) => {
+              let listener = (id, info) => {
+                if (id === tabId && info.status === "complete") {
+                  chrome.tabs.onUpdated.removeListener(listener);
+                  resolve();
+                }
+              };
+              chrome.tabs.onUpdated.addListener(listener);
+              // Timeout after 15s
+              setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve(); }, 15000);
+            });
           }
 
           let illustId = String(message.illustId);
-          console.log("Bookmark request:", { illustId, csrfToken: csrfToken.slice(0, 8) + "..." });
+          console.log("Bookmark: injecting into tab", tabId, "for illust", illustId);
 
-          let bookmarkRes = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json; charset=utf-8",
-              "Accept": "application/json",
-              "X-CSRF-Token": csrfToken,
-              "X-Requested-With": "XMLHttpRequest",
-              "Referer": "https://www.pixiv.net/",
-              "Cookie": cookieStr,
+          // Inject script into the Pixiv tab to extract CSRF token and POST bookmark
+          let results = await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            func: (illustId) => {
+              return new Promise((resolve) => {
+                // Extract CSRF token from the page's meta tag
+                let meta = document.querySelector('#meta-global-data');
+                let token = null;
+                if (meta) {
+                  try {
+                    let data = JSON.parse(meta.getAttribute('content'));
+                    token = data.token;
+                  } catch (e) { /* ignore */ }
+                }
+                if (!token) {
+                  // Fallback: search in page source
+                  let scripts = document.querySelectorAll('script');
+                  for (let s of scripts) {
+                    let m = s.textContent.match(/"token"\s*:\s*"([^"]+)"/);
+                    if (m) { token = m[1]; break; }
+                  }
+                }
+                if (!token) {
+                  resolve({ success: false, error: "CSRF token not found. Please refresh pixiv.net." });
+                  return;
+                }
+
+                // Send bookmark request from within pixiv.net origin (bypasses Cloudflare)
+                fetch("/ajax/illusts/bookmarks/add", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Accept": "application/json",
+                    "X-CSRF-Token": token,
+                  },
+                  body: JSON.stringify({
+                    illust_id: illustId,
+                    restrict: 0,
+                    comment: "",
+                    tags: [],
+                  }),
+                  credentials: "include",
+                })
+                  .then(r => r.json())
+                  .then(json => {
+                    if (json.error) {
+                      resolve({ success: false, error: json.message || "Bookmark failed" });
+                    } else {
+                      resolve({ success: true });
+                    }
+                  })
+                  .catch(e => resolve({ success: false, error: e.message }));
+              });
             },
-            body: JSON.stringify({
-              illust_id: illustId,
-              restrict: 0,
-              comment: "",
-              tags: [],
-            }),
+            args: [illustId],
           });
-          let bookmarkJson = await bookmarkRes.json();
-          console.log("Bookmark response:", bookmarkRes.status, bookmarkJson);
-          if (bookmarkJson.error) {
-            sendResponse({ success: false, error: bookmarkJson.message || "Bookmark failed" });
+
+          let result = results && results[0] && results[0].result;
+          console.log("Bookmark result:", result);
+          if (result) {
+            sendResponse(result);
           } else {
-            sendResponse({ success: true });
+            sendResponse({ success: false, error: "Script injection failed" });
           }
         } catch (e) {
           console.error("Bookmark error:", e);
