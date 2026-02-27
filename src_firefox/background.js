@@ -360,30 +360,33 @@ browser.runtime.onMessage.addListener(function (
         fillQueue();
       } else if (message.action === "bookmarkIllust") {
         try {
-          let pageRes = await fetch("https://www.pixiv.net/", { credentials: "include" });
+          let cookies = await browser.cookies.getAll({ domain: ".pixiv.net" });
+          let cookieStr = cookies.map(c => `${c.name}=${c.value}`).join("; ");
+          if (!cookieStr || !cookies.some(c => c.name === "PHPSESSID")) {
+            sendResponse({ success: false, error: "Not logged in to Pixiv. Please login at pixiv.net first." });
+            return;
+          }
+          console.log("Pixiv cookies found:", cookies.length, "items");
+
+          let pageRes = await fetch("https://www.pixiv.net/", {
+            headers: { "Cookie": cookieStr },
+          });
           let pageText = await pageRes.text();
           let tokenMatch = pageText.match(/"token"\s*:\s*"([^"]+)"/)
-            || pageText.match(/name="csrf-token"\s+content="([^"]+)"/)
-            || pageText.match(/meta-global-data[^>]*content='([^']*token[^']*)'/);
-          let csrfToken = null;
-          if (tokenMatch) {
-            csrfToken = tokenMatch[1];
-            if (csrfToken.includes("{")) {
-              try { csrfToken = JSON.parse(csrfToken).token || null; } catch (e) { csrfToken = null; }
+            || pageText.match(/name="csrf-token"\s+content="([^"]+)"/);
+          let csrfToken = tokenMatch ? tokenMatch[1] : null;
+          if (!csrfToken) {
+            let metaMatch = pageText.match(/id="meta-global-data"\s+content='([^']+)'/);
+            if (metaMatch) {
+              try { csrfToken = JSON.parse(metaMatch[1]).token; } catch (e) { /* ignore */ }
             }
           }
           if (!csrfToken) {
-            console.error("CSRF token not found. Page length:", pageText.length);
             sendResponse({ success: false, error: "Could not get CSRF token. Please login to Pixiv." });
             return;
           }
-          let illustId = Number(message.illustId);
-          let requestBody = {
-            illust_id: illustId,
-            restrict: 0,
-            comment: "",
-            tags: [],
-          };
+
+          let illustId = String(message.illustId);
           console.log("Bookmark request:", { illustId, csrfToken: csrfToken.slice(0, 8) + "..." });
           let bookmarkRes = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
             method: "POST",
@@ -393,9 +396,14 @@ browser.runtime.onMessage.addListener(function (
               "X-CSRF-Token": csrfToken,
               "X-Requested-With": "XMLHttpRequest",
               "Referer": "https://www.pixiv.net/",
+              "Cookie": cookieStr,
             },
-            body: JSON.stringify(requestBody),
-            credentials: "include",
+            body: JSON.stringify({
+              illust_id: illustId,
+              restrict: 0,
+              comment: "",
+              tags: [],
+            }),
           });
           let bookmarkJson = await bookmarkRes.json();
           console.log("Bookmark response:", bookmarkRes.status, bookmarkJson);
