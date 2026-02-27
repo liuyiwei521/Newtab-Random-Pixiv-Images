@@ -52,6 +52,8 @@ export const defaultConfig = {
   minusKeywords: "虚偽users入りタグ 描き方 講座 作画資料 創作 素材 漫画",
   andKeywords: "",
   orKeywords: null, // legacy field, kept for migration detection
+  globalMinusKeywords: "", // global minus tags (space separated)
+  presetMinusKeywords: [], // per-preset minus tags (space separated)
 }
 
 // ── Tree Data Model ──
@@ -175,7 +177,15 @@ export function buildQuery(config) {
       const parts = tree.children
         .map(child => buildQueryFromTree(child))
         .filter(Boolean);
-      return parts.join(tree.connector === "OR" ? " OR " : " ");
+      const joiner = tree.connector === "OR" ? " OR " : " ";
+      let base = parts.join(joiner);
+      // Also append minus keywords if provided (extra negatives)
+      const minusList = (config.minusKeywords || "").trim().split(/\s+/).filter(Boolean);
+      if (minusList.length > 0) {
+        let minusPart = minusList.map(t => "-" + t).join(" ");
+        base = base ? `${base} ${minusPart}` : minusPart;
+      }
+      return base;
     }
     return buildQueryFromTree(tree);
   }
@@ -205,6 +215,13 @@ export function migrateConfig(config) {
       config.orGroups,
       config.minusKeywords || ""
     );
+  }
+
+  if (!config.globalMinusKeywords) {
+    config.globalMinusKeywords = "";
+  }
+  if (!config.presetMinusKeywords || !Array.isArray(config.presetMinusKeywords)) {
+    config.presetMinusKeywords = [];
   }
 
   return config;
@@ -243,4 +260,3 @@ export function getKeywords(andKeywords, orGroups, minusKeywords) {
   let word = allWords.join(' ');
   return word;
 }
-

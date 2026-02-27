@@ -192,6 +192,47 @@
             min-height: 60px;
         }
 
+        .blocklist-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+        }
+
+        .blocklist-card h3 {
+            font-size: 13px;
+            color: #cfcfe8;
+            margin-bottom: 8px;
+        }
+
+        .blocklist-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .blocklist-row label {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .blocklist-row input {
+            background: #252540;
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .blocklist-tip {
+            font-size: 11px;
+            color: #666;
+        }
+
         .flow-container {
             display: flex;
             flex-wrap: wrap;
@@ -767,6 +808,20 @@
                 <button class="btn-preset" id="presetNewBtn">+ New</button>
                 <button class="btn-preset" id="presetRenameBtn">✏️</button>
                 <button class="btn-preset btn-preset-danger" id="presetDeleteBtn">🗑</button>
+            </div>
+
+            <!-- Blocklist -->
+            <div class="blocklist-card">
+                <h3>🚫 Blocklist</h3>
+                <div class="blocklist-row">
+                    <label for="globalMinusKeywords">Global blocklist (space separated)</label>
+                    <input type="text" id="globalMinusKeywords" placeholder="tag1 tag2 tag3" />
+                </div>
+                <div class="blocklist-row">
+                    <label for="presetMinusKeywords">Current preset blocklist</label>
+                    <input type="text" id="presetMinusKeywords" placeholder="tag1 tag2 tag3" />
+                </div>
+                <div class="blocklist-tip">Global + preset blocklists are merged when searching.</div>
             </div>
 
             <!-- Capsule Flow Builder -->

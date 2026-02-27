@@ -2,6 +2,7 @@
   // ── State ──
   let currentTags = [];
   let currentIllustId = null;
+  let currentTagScope = "preset";
 
   class Binding {
     constructor() {
@@ -106,6 +107,10 @@
     binding = new Binding();
     // Tag popup close
     document.getElementById("tagPopupClose").addEventListener("click", closeTagPopup);
+    const presetBtn = document.getElementById("tagScopePreset");
+    const globalBtn = document.getElementById("tagScopeGlobal");
+    presetBtn.addEventListener("click", () => setTagScope("preset"));
+    globalBtn.addEventListener("click", () => setTagScope("global"));
     // Close popup on clicking outside
     document.addEventListener("click", (e) => {
       const popup = document.getElementById("tagPopup");
@@ -191,6 +196,7 @@
     const popup = document.getElementById("tagPopup");
     const tagList = document.getElementById("tagList");
     tagList.innerHTML = "";
+    setTagScope("preset");
 
     tags.forEach((t) => {
       const chip = document.createElement("div");
@@ -213,10 +219,23 @@
     document.getElementById("tagPopup").classList.add("hidden");
   }
 
+  function setTagScope(scope) {
+    currentTagScope = scope === "global" ? "global" : "preset";
+    const presetBtn = document.getElementById("tagScopePreset");
+    const globalBtn = document.getElementById("tagScopeGlobal");
+    if (currentTagScope === "global") {
+      globalBtn.classList.add("active");
+      presetBtn.classList.remove("active");
+    } else {
+      presetBtn.classList.add("active");
+      globalBtn.classList.remove("active");
+    }
+  }
+
   function excludeTag(tag) {
     closeTagPopup();
     chrome.runtime.sendMessage(
-      { action: "excludeTag", tag: tag },
+      { action: "excludeTag", tag: tag, scope: currentTagScope },
       (res) => {
         if (chrome.runtime.lastError) {
           showToast("Failed to exclude tag", "error");
@@ -258,6 +277,7 @@
         return;
       }
       isRequestInProgress = true;
+      console.log("Refresh: sending fetchImage");
       // Safety timeout: force-unlock after 30s in case response never comes
       clearTimeout(safetyTimer);
       safetyTimer = setTimeout(() => {

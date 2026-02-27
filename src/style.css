@@ -251,6 +251,36 @@ body {
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 
+.tag-popup-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tag-popup-scope-label {
+  font-size: 11px;
+  color: #777;
+}
+
+.tag-scope-btn {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #bbb;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag-scope-btn.active {
+  background: rgba(108, 99, 255, 0.25);
+  border-color: rgba(108, 99, 255, 0.5);
+  color: #e0ddff;
+}
+
 .tag-list {
   flex: 1;
   overflow-y: auto;

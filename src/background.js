@@ -1,4 +1,4 @@
-import { defaultConfig, getKeywords, buildQuery, migrateConfig, treeToLegacy } from "./config.js";
+import { defaultConfig, buildQuery, migrateConfig } from "./config.js";
 
 chrome.runtime.onInstalled.addListener((details) => {
   const RULE = [
@@ -99,17 +99,17 @@ async function fetchPixivJson(url) {
     let res = await fetch(url);
     if (!res.ok) {
       console.error(`Fetch pixiv json failed: ${res.status} ${res.statusText}`);
-      return null;
+      return { __error: true, message: `HTTP ${res.status} ${res.statusText}` };
     }
     let res_json = await res.json();
     if (res_json.error) {
       console.error(`Pixiv API error: ${res_json.message}`);
-      return null;
+      return { __error: true, message: res_json.message || "Pixiv API error" };
     }
     return res_json;
   } catch (e) {
     console.error(`Fetch pixiv json error:`, e);
-    return null;
+    return { __error: true, message: e && e.message ? e.message : "Network error" };
   }
 }
 
@@ -134,16 +134,15 @@ class SearchSource {
     this.params = ["order", "mode", "p", "s_mode", "type", "scd", "ecd", "blt", "bgt"];
     this.totalPage = 0;
     this.itemsPerPage = 60;
-    this.illustInfoPages = {};
-    this.maxCachedPages = 5; // Limit cache to avoid always picking from same pages
     this.seenIds = new Set(); // Track recently shown IDs to avoid repeats
+    this.lastErrorMessage = null;
   }
 
   updateConfig(config) {
     this.searchParam = config;
     this.totalPage = 0;
-    this.illustInfoPages = {};
     this.seenIds.clear();
+    this.lastErrorMessage = null;
   }
 
   replaceSpecialCharacter = (function () {
@@ -183,11 +182,16 @@ class SearchSource {
   async searchIllustPage(p) {
     let paramUrl = this.generateSearchUrl(p);
     let jsonResult = await fetchPixivJson(baseUrl + searchUrl + paramUrl);
+    if (jsonResult && jsonResult.__error) {
+      this.lastErrorMessage = jsonResult.message;
+      return null;
+    }
     return jsonResult;
   }
 
   async getRandomIllust() {
     const MAX_RETRIES = 8;
+    this.lastErrorMessage = null;
     for (let i = 0; i < MAX_RETRIES; i++) {
       try {
         if (this.totalPage === 0) {
@@ -198,65 +202,31 @@ class SearchSource {
           if (this.totalPage === 0) return null;
         }
 
-        // Prefer uncached pages for variety (70% chance to pick a fresh page)
-        let randomPage;
-        const cachedKeys = Object.keys(this.illustInfoPages).map(Number);
-        const preferFresh = cachedKeys.length > 0 && Math.random() < 0.7;
+        let randomPage = getRandomInt(0, this.totalPage) + 1;
+        let pageObj = await this.searchIllustPage(randomPage);
+        if (!pageObj || !pageObj.body) continue;
 
-        if (preferFresh && cachedKeys.length < this.totalPage) {
-          // Pick a page NOT in cache
-          do {
-            randomPage = getRandomInt(0, this.totalPage) + 1;
-          } while (cachedKeys.includes(randomPage) && cachedKeys.length < this.totalPage);
-        } else {
-          randomPage = getRandomInt(0, this.totalPage) + 1;
+        let total = pageObj.body.illust.total;
+        let tp = Math.ceil(total / this.itemsPerPage);
+        if (tp > this.totalPage) {
+          this.totalPage = tp;
         }
 
-        if (!this.illustInfoPages[randomPage]) {
-          // Evict a random cached page if cache is full
-          if (cachedKeys.length >= this.maxCachedPages) {
-            const evictKey = cachedKeys[getRandomInt(0, cachedKeys.length)];
-            delete this.illustInfoPages[evictKey];
+        // filter images
+        let illustArray = pageObj.body.illust.data.filter(
+          (el) => {
+            let condition1 = !this.searchParam.min_sl || el.sl >= this.searchParam.min_sl;
+            let condition2 = !this.searchParam.max_sl || el.sl <= this.searchParam.max_sl;
+            let condition3 = !this.searchParam.aiType || el.aiType == this.searchParam.aiType;
+            return condition1 && condition2 && condition3;
           }
+        );
 
-          let pageObj = await this.searchIllustPage(randomPage);
-          if (!pageObj || !pageObj.body) continue;
-
-          let total = pageObj.body.illust.total;
-          let tp = Math.ceil(total / this.itemsPerPage);
-          if (tp > this.totalPage) {
-            this.totalPage = tp;
-          }
-
-          // filter images
-          let pageData = pageObj.body.illust.data.filter(
-            (el) => {
-              let condition1 = !this.searchParam.min_sl || el.sl >= this.searchParam.min_sl;
-              let condition2 = !this.searchParam.max_sl || el.sl <= this.searchParam.max_sl;
-              let condition3 = !this.searchParam.aiType || el.aiType == this.searchParam.aiType;
-              return condition1 && condition2 && condition3;
-            }
-          );
-
-          // Fisher-Yates shuffle for better randomness within a page
-          for (let j = pageData.length - 1; j > 0; j--) {
-            const k = getRandomInt(0, j + 1);
-            [pageData[j], pageData[k]] = [pageData[k], pageData[j]];
-          }
-
-          this.illustInfoPages[randomPage] = pageData;
-        }
-
-        let illustArray = this.illustInfoPages[randomPage];
         if (!illustArray || illustArray.length === 0) continue;
 
         // Filter out recently seen IDs
         let candidates = illustArray.filter(el => !this.seenIds.has(el.id));
-        if (candidates.length === 0) {
-          // All seen on this page — remove from cache to force a fresh page next time
-          delete this.illustInfoPages[randomPage];
-          continue;
-        }
+        if (candidates.length === 0) continue;
 
         let randomIndex = getRandomInt(0, candidates.length);
         let picked = candidates[randomIndex];
@@ -272,7 +242,12 @@ class SearchSource {
         res.profileImageUrl = picked.profileImageUrl;
 
         let illustInfo = await fetchPixivJson(baseUrl + illustInfoUrl + res.illustId);
-        if (!illustInfo || !illustInfo.body) continue;
+        if (!illustInfo || illustInfo.__error || !illustInfo.body) {
+          if (illustInfo && illustInfo.__error) {
+            this.lastErrorMessage = illustInfo.message;
+          }
+          continue;
+        }
 
         res.userName = illustInfo.body.userName;
         res.userId = illustInfo.body.userId;
@@ -325,22 +300,26 @@ function blobToDataUrl(blob) {
 }
 
 let searchSource;
-let illust_queue;
-let running = 0;
 
-function fillQueue() {
-  while (running < illust_queue.capacity() - illust_queue.size()) {
-    ++running;
-    setTimeout(async () => {
-      if (illust_queue.full()) { return; }
-      let res = await searchSource.getRandomIllust();
-      if (res) {
-        illust_queue.push(res);
-        chrome.storage.session.set({ illustQueue: illust_queue });
-      }
-      --running;
-    }, 0);
+function applyActivePreset(config) {
+  if (config.queryPresets && Array.isArray(config.queryPresets) && config.queryPresets.length > 0) {
+    let idx = Math.min(config.activePresetIndex || 0, config.queryPresets.length - 1);
+    if (config.queryPresets[idx] && config.queryPresets[idx].tree) {
+      config.queryTree = config.queryPresets[idx].tree;
+    }
   }
+  return config;
+}
+
+function computeEffectiveMinus(config) {
+  let globalMinus = (config.globalMinusKeywords || "").trim();
+  let presetMinus = "";
+  if (Array.isArray(config.presetMinusKeywords)) {
+    let idx = config.activePresetIndex || 0;
+    presetMinus = (config.presetMinusKeywords[idx] || "").trim();
+  }
+  let combined = [globalMinus, presetMinus].filter(Boolean).join(" ").trim();
+  return combined.replace(/\s+/g, " ");
 }
 
 async function start() {
@@ -348,21 +327,17 @@ async function start() {
   migrateConfig(config);
   // Persist migrated config if orKeywords was converted
   chrome.storage.local.set({ orGroups: config.orGroups, orKeywords: null });
+  applyActivePreset(config);
+  config.minusKeywords = computeEffectiveMinus(config);
   console.log("Current search query:", buildQuery(config));
   searchSource = new SearchSource(config);
-  let queue_cache = await chrome.storage.session.get("illustQueue");
-
-  if (Object.keys(queue_cache).length === 0) {
-    illust_queue = new Queue(4);
-  } else {
-    illust_queue = Object.setPrototypeOf(queue_cache.illustQueue, Queue.prototype)
-  }
-
-  fillQueue();
   console.log("background script loaded");
 }
 
-let initPromise = start();
+let initPromise = start().catch((e) => {
+  console.error("Background init failed:", e);
+  return null;
+});
 
 chrome.runtime.onMessage.addListener(function (
   message,
@@ -371,13 +346,26 @@ chrome.runtime.onMessage.addListener(function (
 ) {
   (
     async () => {
-      await initPromise;
+      try {
+        await initPromise;
+      } catch (e) {
+        console.error("Init promise error:", e);
+        sendResponse({
+          error: "INIT_FAILED",
+          message: "Background init failed. Please reload the extension."
+        });
+        return;
+      }
+      if (!searchSource) {
+        sendResponse({
+          error: "INIT_FAILED",
+          message: "Background not ready. Please reload the extension."
+        });
+        return;
+      }
       if (message.action === "fetchImage") {
         try {
-          let res = illust_queue.pop();
-          if (!res) {
-            res = await searchSource.getRandomIllust();
-          }
+          let res = await searchSource.getRandomIllust();
           if (res) {
             sendResponse(res);
             let { profileImageUrl, imageObjectUrl, ...filteredRes } = res;
@@ -385,10 +373,9 @@ chrome.runtime.onMessage.addListener(function (
           } else {
             sendResponse({
               error: "NO_RESULT",
-              message: "No image found. Please check your tags or Pixiv availability."
+              message: searchSource.lastErrorMessage || "No image found. Please check your tags or Pixiv availability."
             });
           }
-          fillQueue();
         } catch (e) {
           console.error("fetchImage handler error:", e);
           sendResponse({
@@ -399,160 +386,152 @@ chrome.runtime.onMessage.addListener(function (
       } else if (message.action === "updateConfig") {
         let config = await chrome.storage.local.get(defaultConfig);
         migrateConfig(config);
+        applyActivePreset(config);
+        config.minusKeywords = computeEffectiveMinus(config);
         console.log("Updated search query:", buildQuery(config));
         searchSource.updateConfig(config);
-        illust_queue = new Queue(4);
-        chrome.storage.session.set({ illustQueue: illust_queue });
-        fillQueue();
       } else if (message.action === "bookmarkIllust") {
         try {
-          const attemptBookmark = async (illustId, retryCount = 0) => {
-            // Find an existing Pixiv tab to inject into
-            let tabs = await chrome.tabs.query({ url: "*://*.pixiv.net/*" });
-            let tabId;
-            if (tabs.length > 0) {
-              tabId = tabs[0].id;
-            } else {
-              // Open a Pixiv tab in background, wait for it to load
-              let tab = await chrome.tabs.create({ url: "https://www.pixiv.net/", active: false });
-              tabId = tab.id;
-              // Wait for the tab to finish loading
-              await new Promise((resolve) => {
-                let listener = (id, info) => {
-                  if (id === tabId && info.status === "complete") {
-                    chrome.tabs.onUpdated.removeListener(listener);
-                    resolve();
-                  }
-                };
-                chrome.tabs.onUpdated.addListener(listener);
-                // Timeout after 15s
-                setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve(); }, 15000);
-              });
+          const illustIdStr = String(message.illustId || "");
+          if (!illustIdStr) {
+            sendResponse({ success: false, error: "Invalid illust id" });
+            return;
+          }
+
+          const fetchTokenFromHtml = async (url) => {
+            try {
+              const res = await fetch(url, { credentials: "include" });
+              console.log("[bookmark] HTML fetch", url, "status", res.status);
+              if (!res.ok) return null;
+              const html = await res.text();
+              console.log("[bookmark] HTML length", html.length, "token match", /\"token\"\s*:\s*\"([a-f0-9]{32})\"/.test(html));
+              const m = html.match(/"token"\s*:\s*"([a-f0-9]{32})"/);
+              return m ? m[1] : null;
+            } catch (e) {
+              console.warn("[bookmark] HTML fetch error", url, e);
+              return null;
             }
-
-            let illustIdStr = String(illustId);
-            console.log("Bookmark: injecting into tab", tabId, "for illust", illustIdStr);
-
-            // Inject script into the Pixiv tab to extract CSRF token and POST bookmark
-            let results = await chrome.scripting.executeScript({
-              target: { tabId: tabId },
-              world: "MAIN",
-              func: async (illustId) => {
-                // --- Extract CSRF token (try multiple sources) ---
-                let token = null;
-
-                // 1. Meta tag
-                let meta = document.querySelector('#meta-global-data')
-                  || document.querySelector('meta[name="global-data"]');
-                if (meta) {
-                  try { token = JSON.parse(meta.getAttribute('content')).token; } catch (e) { }
-                }
-
-                // 2. JS globals (Pixiv stores token in various places)
-                if (!token && typeof pixiv !== 'undefined' && pixiv.context) {
-                  token = pixiv.context.token;
-                }
-                if (!token && typeof globalInitData !== 'undefined') {
-                  token = globalInitData.token;
-                }
-
-                // 3. __NEXT_DATA__ script tag
-                if (!token) {
-                  let nd = document.querySelector('#__NEXT_DATA__');
-                  if (nd) {
-                    try {
-                      let data = JSON.parse(nd.textContent);
-                      token = data?.props?.pageProps?.token;
-                    } catch (e) { }
-                  }
-                }
-
-                // 4. Search all script tags
-                if (!token) {
-                  for (let s of document.querySelectorAll('script')) {
-                    let m = s.textContent.match(/"token"\s*:\s*"([a-f0-9]{32})"/);
-                    if (m) { token = m[1]; break; }
-                  }
-                }
-
-                // 5. Ultimate fallback: fetch current page HTML (same-origin, bypasses Cloudflare)
-                if (!token) {
-                  try {
-                    let res = await fetch(location.href, { credentials: 'include' });
-                    let html = await res.text();
-                    let m = html.match(/"token"\s*:\s*"([a-f0-9]{32})"/);
-                    if (m) token = m[1];
-                  } catch (e) { }
-                }
-
-                if (!token) {
-                  return { success: false, code: "TOKEN_NOT_FOUND", error: "CSRF token not found. Please refresh pixiv.net." };
-                }
-
-                // --- Send bookmark request (same-origin) ---
-                try {
-                  let r = await fetch("/ajax/illusts/bookmarks/add", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json; charset=utf-8",
-                      "Accept": "application/json",
-                      "X-CSRF-Token": token,
-                    },
-                    body: JSON.stringify({
-                      illust_id: illustId,
-                      restrict: 0,
-                      comment: "",
-                      tags: [],
-                    }),
-                    credentials: "include",
-                  });
-                  let json = await r.json();
-                  if (json.error) {
-                    return { success: false, code: "BOOKMARK_FAILED", error: json.message || "Bookmark failed" };
-                  }
-                  return { success: true };
-                } catch (e) {
-                  return { success: false, code: "BOOKMARK_FAILED", error: e.message };
-                }
-              },
-              args: [illustIdStr],
-            });
-
-            let result = results && results[0] && results[0].result;
-            console.log("Bookmark result:", result);
-            if (result && result.code === "TOKEN_NOT_FOUND" && retryCount < 1) {
-              // Retry once by reloading the Pixiv tab
-              try {
-                await chrome.tabs.reload(tabId);
-                await new Promise((resolve) => {
-                  let listener = (id, info) => {
-                    if (id === tabId && info.status === "complete") {
-                      chrome.tabs.onUpdated.removeListener(listener);
-                      resolve();
-                    }
-                  };
-                  chrome.tabs.onUpdated.addListener(listener);
-                  setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve(); }, 15000);
-                });
-              } catch (e) {
-                console.warn("Pixiv tab reload failed:", e);
-              }
-              return attemptBookmark(illustIdStr, retryCount + 1);
-            }
-            return result || { success: false, code: "INJECT_FAILED", error: "Script injection failed" };
           };
 
-          let result = await attemptBookmark(message.illustId, 0);
-          if (result && result.code === "TOKEN_NOT_FOUND") {
-            // Open login page to help user re-auth
-            await chrome.tabs.create({ url: "https://www.pixiv.net/login", active: true });
+          const fetchTokenFromJson = async (url) => {
+            try {
+              const res = await fetch(url, { credentials: "include" });
+              console.log("[bookmark] JSON fetch", url, "status", res.status);
+              if (!res.ok) return null;
+              const json = await res.json();
+              console.log("[bookmark] JSON error", !!(json && json.error));
+              if (json && json.error) return null;
+              return (json && (json.token || (json.body && json.body.token))) || null;
+            } catch (e) {
+              console.warn("[bookmark] JSON fetch error", url, e);
+              return null;
+            }
+          };
+
+          // 1) Try JSON endpoints (no page navigation)
+          let token =
+            (await fetchTokenFromJson("https://www.pixiv.net/ajax/user/extra")) ||
+            (await fetchTokenFromJson("https://www.pixiv.net/ajax/user/extra?lang=zh"));
+
+          // 2) Try HTML endpoints (no page navigation)
+          if (!token) {
+            token =
+              (await fetchTokenFromHtml(`https://www.pixiv.net/artworks/${illustIdStr}`)) ||
+              (await fetchTokenFromHtml("https://www.pixiv.net/"));
+          }
+
+          // 3) Fallback: if user already has a Pixiv tab, extract token from DOM
+          if (!token) {
+            let tabs = await chrome.tabs.query({ url: "*://*.pixiv.net/*" });
+            if (tabs.length > 0) {
+              let tabId = tabs[0].id;
+              console.log("[bookmark] DOM fallback tab", tabId);
+              let results = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                world: "MAIN",
+                func: () => {
+                  let token = null;
+                  let meta = document.querySelector('#meta-global-data')
+                    || document.querySelector('meta[name="global-data"]');
+                  if (meta) {
+                    try { token = JSON.parse(meta.getAttribute('content')).token; } catch (e) { }
+                  }
+                  if (!token && typeof pixiv !== 'undefined' && pixiv.context) {
+                    token = pixiv.context.token;
+                  }
+                  if (!token && typeof globalInitData !== 'undefined') {
+                    token = globalInitData.token;
+                  }
+                  if (!token) {
+                    let nd = document.querySelector('#__NEXT_DATA__');
+                    if (nd) {
+                      try {
+                        let data = JSON.parse(nd.textContent);
+                        token = data?.props?.pageProps?.token;
+                      } catch (e) { }
+                    }
+                  }
+                  if (!token) {
+                    for (let s of document.querySelectorAll('script')) {
+                      let m = s.textContent.match(/"token"\s*:\s*"([a-f0-9]{32})"/);
+                      if (m) { token = m[1]; break; }
+                    }
+                  }
+                  return token;
+                }
+              });
+              token = results && results[0] && results[0].result ? results[0].result : null;
+              console.log("[bookmark] DOM fallback token found", !!token);
+            }
+          }
+
+          if (!token) {
             sendResponse({
               success: false,
-              error: "CSRF token not found. Opened Pixiv login page. Please log in and try again."
+              code: "TOKEN_NOT_FOUND",
+              error: "CSRF token not found. Please ensure you are logged in to Pixiv."
             });
             return;
           }
-          sendResponse(result || { success: false, error: "Script injection failed" });
+
+          let r;
+          try {
+            r = await fetch("https://www.pixiv.net/ajax/illusts/bookmarks/add", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json",
+                "X-CSRF-Token": token,
+              },
+              body: JSON.stringify({
+                illust_id: illustIdStr,
+                restrict: 0,
+                comment: "",
+                tags: [],
+              }),
+              credentials: "include",
+            });
+          } catch (e) {
+            sendResponse({ success: false, code: "BOOKMARK_FAILED", error: e.message || "Bookmark failed" });
+            return;
+          }
+
+          if (!r.ok) {
+            let msg = `HTTP ${r.status}`;
+            if (r.status === 401 || r.status === 403) {
+              msg = "Not logged in. Please log in to Pixiv.";
+            }
+            sendResponse({ success: false, code: "BOOKMARK_FAILED", error: msg });
+            return;
+          }
+
+          let json = await r.json();
+          if (json && json.error) {
+            sendResponse({ success: false, code: "BOOKMARK_FAILED", error: json.message || "Bookmark failed" });
+            return;
+          }
+
+          sendResponse({ success: true });
         } catch (e) {
           console.error("Bookmark error:", e);
           sendResponse({ success: false, error: e.message });
@@ -565,33 +544,36 @@ chrome.runtime.onMessage.addListener(function (
             activePresetIndex: 0,
           });
           migrateConfig(config);
-
-          let tree = config.queryTree || { type: "group", connector: "AND", children: [] };
-          // Add negated tag
-          tree.children.push({ type: "tag", value: message.tag, negated: true });
-
-          let legacy = treeToLegacy(tree);
-          let saveData = {
-            queryTree: tree,
-            andKeywords: legacy.andKeywords,
-            orGroups: legacy.orGroups,
-            minusKeywords: legacy.minusKeywords,
-          };
-
-          // Also update active preset if presets exist
-          if (config.queryPresets && Array.isArray(config.queryPresets) && config.queryPresets.length > 0) {
-            let idx = config.activePresetIndex || 0;
-            if (idx < config.queryPresets.length) {
-              config.queryPresets[idx].tree = JSON.parse(JSON.stringify(tree));
-            }
-            saveData.queryPresets = config.queryPresets;
+          let scope = message.scope === "global" ? "global" : "preset";
+          let tag = String(message.tag || "").trim();
+          if (!tag) {
+            sendResponse({ success: false, error: "Invalid tag" });
+            return;
           }
 
-          await chrome.storage.local.set(saveData);
-          searchSource.updateConfig({ ...config, ...saveData });
-          illust_queue = new Queue(4);
-          chrome.storage.session.set({ illustQueue: illust_queue });
-          fillQueue();
+          if (!Array.isArray(config.presetMinusKeywords)) {
+            config.presetMinusKeywords = [];
+          }
+
+          if (scope === "global") {
+            let list = (config.globalMinusKeywords || "").trim().split(/\s+/).filter(Boolean);
+            if (!list.includes(tag)) list.push(tag);
+            config.globalMinusKeywords = list.join(" ");
+          } else {
+            let idx = config.activePresetIndex || 0;
+            let list = (config.presetMinusKeywords[idx] || "").trim().split(/\s+/).filter(Boolean);
+            if (!list.includes(tag)) list.push(tag);
+            config.presetMinusKeywords[idx] = list.join(" ");
+          }
+
+          applyActivePreset(config);
+          config.minusKeywords = computeEffectiveMinus(config);
+          await chrome.storage.local.set({
+            globalMinusKeywords: config.globalMinusKeywords,
+            presetMinusKeywords: config.presetMinusKeywords,
+          });
+
+          searchSource.updateConfig(config);
           sendResponse({ success: true });
         } catch (e) {
           console.error("Exclude tag error:", e);

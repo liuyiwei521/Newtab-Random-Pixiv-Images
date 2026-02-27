@@ -70,6 +70,11 @@
     <!-- Tag Popup for dislike -->
     <div id="tagPopup" class="tag-popup hidden">
       <div class="tag-popup-header">Select a tag to exclude:</div>
+      <div class="tag-popup-scope">
+        <span class="tag-popup-scope-label">Apply to:</span>
+        <button id="tagScopePreset" class="tag-scope-btn active" data-scope="preset">Preset</button>
+        <button id="tagScopeGlobal" class="tag-scope-btn" data-scope="global">Global</button>
+      </div>
       <div id="tagList" class="tag-list"></div>
       <div class="tag-popup-footer">
         <button id="tagPopupClose" class="tag-popup-btn">Cancel</button>
