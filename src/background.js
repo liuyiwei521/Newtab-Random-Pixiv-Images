@@ -365,18 +365,23 @@ chrome.runtime.onMessage.addListener(function (
     async () => {
       await initPromise;
       if (message.action === "fetchImage") {
-        let res = illust_queue.pop();
-        if (!res) {
-          res = await searchSource.getRandomIllust();
-        }
-        if (res) {
-          sendResponse(res);
-          let { profileImageUrl, imageObjectUrl, ...filteredRes } = res;
-          console.log(filteredRes);
-        } else {
+        try {
+          let res = illust_queue.pop();
+          if (!res) {
+            res = await searchSource.getRandomIllust();
+          }
+          if (res) {
+            sendResponse(res);
+            let { profileImageUrl, imageObjectUrl, ...filteredRes } = res;
+            console.log(filteredRes);
+          } else {
+            sendResponse(null);
+          }
+          fillQueue();
+        } catch (e) {
+          console.error("fetchImage handler error:", e);
           sendResponse(null);
         }
-        fillQueue();
       } else if (message.action === "updateConfig") {
         let config = await chrome.storage.local.get(defaultConfig);
         migrateConfig(config);

@@ -247,20 +247,33 @@
 
   const sendRefreshMessage = (() => {
     let isRequestInProgress = false;
+    let safetyTimer = null;
     return () => {
       if (isRequestInProgress) {
         return;
       }
       isRequestInProgress = true;
+      // Safety timeout: force-unlock after 30s in case response never comes
+      clearTimeout(safetyTimer);
+      safetyTimer = setTimeout(() => {
+        console.warn("Refresh safety timeout — force unlocking");
+        isRequestInProgress = false;
+      }, 30000);
       browser.runtime.sendMessage({ action: "fetchImage" }, (res) => {
+        clearTimeout(safetyTimer);
         if (browser.runtime.lastError) {
           console.warn("Context invalidated, message could not be processed:", browser.runtime.lastError.message);
           isRequestInProgress = false;
           return;
         }
-        changeElement(res).finally(() => {
+        try {
+          changeElement(res).finally(() => {
+            isRequestInProgress = false;
+          });
+        } catch (e) {
+          console.error("changeElement error:", e);
           isRequestInProgress = false;
-        });
+        }
       });
     };
   })();
