@@ -274,11 +274,14 @@ class SearchSource {
         res.illustIdUrl = baseUrl + "/artworks/" + illustInfo.body.illustId;
         res.title = illustInfo.body.title;
         res.imageObjectUrl = illustInfo.body.urls.regular;
-        // Extract tags for frontend
-        res.tags = (illustInfo.body.tags && illustInfo.body.tags.tags || []).map(t => ({
-          tag: t.tag,
-          translation: t.translation && t.translation.en || null
-        }));
+        // Extract tags for frontend (prefer zh → zh_tw → en translation)
+        res.tags = (illustInfo.body.tags && illustInfo.body.tags.tags || []).map(t => {
+          let tr = t.translation || {};
+          return {
+            tag: t.tag,
+            translation: tr.zh || tr.zh_tw || tr.en || null,
+          };
+        });
 
         let [imgBlob, profileBlob] = await Promise.all([
           fetchImage(res.imageObjectUrl),
